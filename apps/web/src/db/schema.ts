@@ -234,6 +234,8 @@ export const briefs = pgTable(
   {
     id: id(),
     userId: userRef(),
+    /** The agent message that produced it; a retried delivery is not stored twice. */
+    requestId: text('request_id'),
     forDate: text('for_date').notNull(),
     itemsJson: jsonb('items_json').$type<unknown>().notNull(),
     summaryText: text('summary_text').notNull(),
@@ -241,7 +243,10 @@ export const briefs = pgTable(
     generatedAt: timestamp('generated_at', { withTimezone: true }).notNull().defaultNow(),
     deliveredAt: timestamp('delivered_at', { withTimezone: true }),
   },
-  (t) => [index('briefs_user_date_idx').on(t.userId, t.forDate)],
+  (t) => [
+    index('briefs_user_date_idx').on(t.userId, t.forDate),
+    uniqueIndex('briefs_user_request_uq').on(t.userId, t.requestId),
+  ],
 );
 
 export const agentEvents = pgTable(

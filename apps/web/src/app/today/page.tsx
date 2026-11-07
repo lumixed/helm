@@ -1,7 +1,11 @@
+import { formatWhen as whenLabel } from '@/lib/format';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { formatDuration, rankAssignments } from '@helm/shared';
 import { AgentStatus } from '@/components/AgentStatus';
+import { BriefCard } from '@/components/BriefCard';
+import { todaysBrief } from '@/lib/briefs';
+import { currentUser } from '@/lib/session';
 import { Card, Shell } from '@/components/ui';
 import { getDb } from '@/db';
 import { listAssignments } from '@/lib/assignments';
@@ -9,24 +13,15 @@ import { requireProfile } from '@/lib/page-data';
 
 export const dynamic = 'force-dynamic';
 
-function whenLabel(dueAt: string, tz: string) {
-  return new Intl.DateTimeFormat('en-CA', {
-    timeZone: tz,
-    weekday: 'short',
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  }).format(new Date(dueAt));
-}
-
 export default async function TodayPage() {
   const { user, agent } = await requireProfile();
   if (!user.onboarded) redirect('/setup');
   const db = await getDb();
-  const [confirmed, pending] = await Promise.all([
+  const fullUser = (await currentUser())!;
+  const [confirmed, pending, brief] = await Promise.all([
     listAssignments(db, user.id, user.timezone, { review: false }),
     listAssignments(db, user.id, user.timezone, { review: true }),
+    todaysBrief(db, fullUser),
   ]);
   const now = new Date();
   const ranked = rankAssignments(confirmed, now);
@@ -37,12 +32,20 @@ export default async function TodayPage() {
     <Shell
       title={user.name ? `Today, ${user.name}` : 'Today'}
       actions={
-        <Link
-          href="/setup"
-          className="min-h-11 rounded-xl px-3 py-2 font-medium underline-offset-4 hover:underline"
-        >
-          Settings
-        </Link>
+        <nav aria-label="Main" className="flex gap-1">
+          <Link
+            href="/timeline"
+            className="min-h-11 rounded-xl px-3 py-2 font-medium underline-offset-4 hover:underline"
+          >
+            Timeline
+          </Link>
+          <Link
+            href="/setup"
+            className="min-h-11 rounded-xl px-3 py-2 font-medium underline-offset-4 hover:underline"
+          >
+            Settings
+          </Link>
+        </nav>
       }
     >
       {pending.length > 0 && (
@@ -54,8 +57,10 @@ export default async function TodayPage() {
         </Link>
       )}
 
+      <BriefCard initial={brief} briefTime={user.briefTimeLocal} />
+
       <Card>
-        <h2 className="text-lg font-semibold">Focus today</h2>
+        <h2 className="text-lg font-semibold">Right now</h2>
         {focus.length === 0 ? (
           <p className="mt-2">
             {confirmed.length === 0 ? 'No deadlines yet. ' : 'Nothing is pressing right now. '}

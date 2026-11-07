@@ -26,3 +26,16 @@ export async function postBackend(
   }
   throw last instanceof Error ? last : new Error(String(last));
 }
+
+/** Authenticated GET to the student's backend. */
+export async function getBackend(
+  pathname: string,
+  opts: { fetch?: typeof fetch } = {},
+): Promise<Response> {
+  const rt = runtime();
+  if (!rt.backendUrl || !rt.agentToken) throw new Error('Backend is not configured on this agent');
+  return (opts.fetch ?? fetch)(`${rt.backendUrl}${pathname}`, {
+    headers: { authorization: `Bearer ${rt.agentToken}` },
+    signal: AbortSignal.timeout(15_000),
+  });
+}

@@ -31,3 +31,13 @@ export async function agentRequest<T extends z.ZodType<{ studentId: string }>>(
     return { ok: false, error: fail(403, 'invalid agent token') };
   return { ok: true, db, agent, body: body.data as z.infer<T> };
 }
+
+/** For agent GET routes: the token alone identifies the agent and its student. */
+export async function agentFromToken(req: Request) {
+  const token = bearer(req);
+  if (!token) return { ok: false as const, error: fail(401, 'missing bearer token') };
+  const db = await getDb();
+  const agent = await findAgentByToken(db, token);
+  if (!agent) return { ok: false as const, error: fail(403, 'invalid agent token') };
+  return { ok: true as const, db, agent };
+}

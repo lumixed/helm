@@ -22,6 +22,13 @@
       "when": 1794088820890,
       "tag": "0002_course_code_index",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1794090546118,
+      "tag": "0003_brief_request_and_events",
+      "breakpoints": true
     }
   ]
 }

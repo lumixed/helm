@@ -1,7 +1,15 @@
-import { utcToLocal, type AgentMessage, type IntakeResultRequest } from '@helm/shared';
+import {
+  AgentState,
+  utcToLocal,
+  type AgentMessage,
+  type BriefRequest,
+  type IntakeResultRequest,
+} from '@helm/shared';
+import { z } from 'zod';
 import { DATA_DIR, runtime } from './config';
-import { postBackend } from './backend';
-import { LlmError } from './llm/gemini';
+import { geminiJson, LlmError, llmFromEnv } from './llm/gemini';
+import { buildBrief, wordingPrompt, type WordFn } from './tools/brief';
+import { getBackend, postBackend } from './backend';
 import { extractDeadlines, type ExtractOutput } from './tools/extract';
 import { DocumentError, readDocumentText, resolveInside } from './tools/read-document';
 import type { Emitter } from './emit';
@@ -22,24 +30,42 @@ export interface HandlerDeps {
     ctx: { timezone: string; today: string; courseHint?: string },
   ) => Promise<ExtractOutput>;
   post: (path: string, body: unknown) => Promise<Response>;
+  get: (path: string) => Promise<Response>;
+  word: WordFn;
+  now: () => Date;
   dataDir: string;
 }
 
 const defaultDeps = (): HandlerDeps => ({
-  extract: (text, ctx) =>
-    extractDeadlines(text, ctx, {
-      apiKey: process.env.GEMINI_API_KEY ?? '',
-      models: process.env.GEMINI_MODEL?.split(',')
-        .map((m) => m.trim())
-        .filter(Boolean),
-    }),
+  extract: (text, ctx) => extractDeadlines(text, ctx, llmFromEnv()),
   post: (path, body) => postBackend(path, body),
+  get: (path) => getBackend(path),
+  word: async (draft) => {
+    const llm = llmFromEnv();
+    const p = wordingPrompt(draft);
+    const r = await geminiJson(
+      { ...llm, timeoutMs: 20_000 },
+      {
+        system: p.system,
+        user: p.user,
+        schemaName: 'brief_opener',
+        jsonSchema: {
+          type: 'object',
+          required: ['summary'],
+          properties: { summary: { type: 'string' } },
+        },
+        zod: z.object({ summary: z.string().min(1).max(800) }),
+      },
+    );
+    return { summary: r.data.summary, writer: r.model };
+  },
+  now: () => new Date(),
   dataDir: DATA_DIR,
 });
 
 const WAKE_REASONS: Record<AgentMessage['type'], string> = {
   ping: 'Woke for a connectivity check',
-  'brief.generate': 'Woke to write the morning brief',
+  'brief.generate': 'Woke to write your brief',
   heartbeat: 'Woke for the safety-net check',
   'intake.parse': 'Woke to read a new syllabus',
   'inbox.message': 'Woke for a new email',
@@ -87,6 +113,15 @@ export async function handleMessage(msg: AgentMessage, ctx: HandlerContext): Pro
       });
       const r = await ctx.emitter.emit(woke, pong);
       reply = `pong (${r.delivered} events delivered, ${r.queued} queued)`;
+      break;
+    }
+    case 'brief.generate': {
+      reply = await handleBrief(msg, requestId, woke, ctx);
+      break;
+    }
+    case 'heartbeat': {
+      // Safety net for submissions (built with M7). Stays quiet so the timeline isn't flooded.
+      reply = 'ok';
       break;
     }
     case 'intake.parse': {
@@ -198,4 +233,70 @@ async function handleIntake(
     }),
   );
   return `Found ${out.assignments.length} deadlines in ${fileName}.`;
+}
+
+async function handleBrief(
+  msg: Extract<AgentMessage, { type: 'brief.generate' }>,
+  requestId: string,
+  woke: ReturnType<Emitter['event']>,
+  ctx: HandlerContext,
+): Promise<string> {
+  const deps = { ...defaultDeps(), ...ctx.deps };
+  const trigger = ctx.source === 'scheduled' ? 'cron' : msg.payload.trigger;
+  const failed = async (reason: string, detail: string) => {
+    await ctx.emitter.emit(
+      woke,
+      ctx.emitter.event({
+        eventId: `${requestId}:failed`,
+        requestId,
+        type: 'brief.failed',
+        reason,
+        payload: { trigger, detail: detail.slice(0, 500) },
+      }),
+    );
+    return reason;
+  };
+  const started = Date.now();
+  let state: AgentState;
+  try {
+    const res = await deps.get('/api/agent/state');
+    if (!res.ok)
+      return failed('Could not load your deadlines for the brief.', `HTTP ${res.status}`);
+    state = AgentState.parse(await res.json());
+  } catch (err) {
+    return failed('Could not load your deadlines for the brief.', String(err));
+  }
+  const brief = await buildBrief(state, deps.now(), trigger, deps.word);
+  const body: BriefRequest = { studentId: state.studentId, requestId, brief };
+  try {
+    const res = await deps.post('/api/agent/brief', body);
+    if (!res.ok)
+      return failed(
+        'Wrote your brief but could not deliver it.',
+        `HTTP ${res.status} ${await res.text()}`,
+      );
+  } catch (err) {
+    return failed('Wrote your brief but could not deliver it.', String(err));
+  }
+  await ctx.emitter.emit(
+    woke,
+    ctx.emitter.event({
+      eventId: `${requestId}:brief`,
+      requestId,
+      type: 'brief.generated',
+      reason:
+        `Wrote your ${trigger === 'cron' ? 'morning' : ''} brief: ${brief.focus.length} focus item${brief.focus.length === 1 ? '' : 's'}`.replace(
+          '  ',
+          ' ',
+        ),
+      payload: {
+        trigger,
+        forDate: brief.forDate,
+        focus: brief.focus.length,
+        writer: brief.writer,
+        ms: Date.now() - started,
+      },
+    }),
+  );
+  return `Brief for ${brief.forDate}: ${brief.focus.map((f) => f.title).join('; ') || 'nothing urgent'}`;
 }

@@ -18,6 +18,8 @@ export const DEFAULT_MODELS = [
 
 export interface GeminiOptions {
   apiKey: string;
+  /** OpenAI-compatible base URL. Defaults to Gemini's. */
+  baseUrl?: string;
   models?: string[];
   timeoutMs?: number;
   fetch?: typeof fetch;
@@ -62,20 +64,23 @@ export async function geminiJson<T>(
       ];
       let res: Response;
       try {
-        res = await (opts.fetch ?? fetch)(`${GEMINI_BASE}/chat/completions`, {
-          method: 'POST',
-          headers: { authorization: `Bearer ${opts.apiKey}`, 'content-type': 'application/json' },
-          body: JSON.stringify({
-            model,
-            temperature: 0,
-            messages,
-            response_format: {
-              type: 'json_schema',
-              json_schema: { name: req.schemaName, schema: req.jsonSchema },
-            },
-          }),
-          signal: AbortSignal.timeout(opts.timeoutMs ?? 40_000),
-        });
+        res = await (opts.fetch ?? fetch)(
+          `${(opts.baseUrl ?? GEMINI_BASE).replace(/\/+$/, '')}/chat/completions`,
+          {
+            method: 'POST',
+            headers: { authorization: `Bearer ${opts.apiKey}`, 'content-type': 'application/json' },
+            body: JSON.stringify({
+              model,
+              temperature: 0,
+              messages,
+              response_format: {
+                type: 'json_schema',
+                json_schema: { name: req.schemaName, schema: req.jsonSchema },
+              },
+            }),
+            signal: AbortSignal.timeout(opts.timeoutMs ?? 40_000),
+          },
+        );
       } catch (err) {
         attempts.push(`${model}: ${String(err).slice(0, 120)}`);
         break; // timeout or network: next model
@@ -103,7 +108,7 @@ export async function geminiJson<T>(
       attempts.push(`${model}: schema mismatch (${feedback.slice(0, 120)})`);
     }
   }
-  throw new LlmError(`All Gemini models failed: ${attempts.join(' | ')}`, attempts);
+  throw new LlmError(`All models failed: ${attempts.join(' | ')}`, attempts);
 }
 
 function contentOf(body: string): string | null {
@@ -124,3 +129,29 @@ function errorMessage(body: string): string {
     return body.slice(0, 120);
   }
 }
+
+/**
+ * Which LLM the agent uses. Maritime LLM (per-agent `mllm_` token, spend cap enforced by
+ * Maritime) when the platform injected it; otherwise Gemini with GEMINI_API_KEY.
+ * LLM_MODELS (comma-separated) overrides the model list for either.
+ */
+export function llmFromEnv(
+  env: NodeJS.ProcessEnv = process.env,
+): GeminiOptions & { provider: 'maritime' | 'gemini' } {
+  const models = (env.LLM_MODELS ?? env.GEMINI_MODEL)
+    ?.split(',')
+    .map((m) => m.trim())
+    .filter(Boolean);
+  if (env.OPENAI_API_KEY?.startsWith('mllm_') && env.OPENAI_BASE_URL) {
+    return {
+      provider: 'maritime',
+      apiKey: env.OPENAI_API_KEY,
+      baseUrl: env.OPENAI_BASE_URL,
+      models: models?.length ? models : MARITIME_MODELS,
+    };
+  }
+  return { provider: 'gemini', apiKey: env.GEMINI_API_KEY ?? '', baseUrl: GEMINI_BASE, models };
+}
+
+/** Maritime LLM serves OpenAI models (docs list gpt-5.4, gpt-5-mini, gpt-5.5). */
+export const MARITIME_MODELS = ['gpt-5-mini', 'gpt-5.4'];

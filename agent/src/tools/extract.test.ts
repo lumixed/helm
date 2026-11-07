@@ -100,6 +100,6 @@ describe('extractDeadlines (fake Gemini)', () => {
         { timezone: 'UTC', today: '2026-11-07' },
         { apiKey: 'k', models: ['a', 'b'], fetch },
       ),
-    ).rejects.toThrow(/All Gemini models failed/);
+    ).rejects.toThrow(/All models failed/);
   });
 });

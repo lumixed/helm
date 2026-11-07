@@ -281,4 +281,79 @@ describe('agent http contract', () => {
       /outside the agent's storage/,
     );
   });
+
+  it('brief.generate loads state, ranks, posts the brief and logs it', async () => {
+    const { createApp } = await import('./server');
+    const { Emitter } = await import('./emit');
+    const { Dedupe } = await import('./dedupe');
+    await setup();
+    const posted: Record<string, unknown>[] = [];
+    const events: string[] = [];
+    const emitter = new Emitter({
+      target: () => ({ backendUrl: 'https://b.test', token: 't', studentId: 's1' }),
+      outbox: path.join(dir, 'ob3.jsonl'),
+      fetch: (async (_u: string | URL | Request, init?: RequestInit) => {
+        for (const e of JSON.parse(String(init?.body)).events)
+          events.push(`${e.type}: ${e.reason}`);
+        return new Response('{}');
+      }) as typeof fetch,
+    });
+    const now = new Date('2026-11-09T15:30:00Z');
+    const app = createApp({
+      emitter,
+      dedupe: new Dedupe(path.join(dir, 'p3.json')),
+      handlerDeps: {
+        now: () => now,
+        get: async () =>
+          Response.json({
+            studentId: 's1',
+            name: 'Maya',
+            timezone: 'America/Los_Angeles',
+            briefTimeLocal: '07:30',
+            changes: [],
+            assignments: [
+              {
+                id: 'a1',
+                courseCode: 'ENGL 150',
+                title: 'Essay 2',
+                dueAt: '2026-11-10T07:59:00Z',
+                weightPct: 30,
+                estMinutes: 300,
+                progressPct: 0,
+                status: 'todo',
+              },
+            ],
+          }),
+        post: async (_p, body) => {
+          posted.push(body as Record<string, unknown>);
+          return new Response('{}');
+        },
+        word: async () => ({ summary: 'Morning, Maya. Essay 2 first.', writer: 'test-model' }),
+      },
+    });
+    const msg = encodeAgentMessage({
+      v: 1,
+      type: 'brief.generate',
+      requestId: 'cron:brief',
+      studentId: 's1',
+    });
+    const res = await app.request('/chat', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ message: msg, source: 'scheduled' }),
+    });
+    expect(((await res.json()) as { response: string }).response).toBe(
+      'Brief for 2026-11-09: Essay 2',
+    );
+    const brief = posted[0]?.brief as Record<string, unknown>;
+    expect(brief).toMatchObject({
+      trigger: 'cron',
+      summary: 'Morning, Maya. Essay 2 first.',
+      writer: 'test-model',
+    });
+    expect(events).toEqual([
+      'agent.woke: Woke to write your brief',
+      'brief.generated: Wrote your morning brief: 1 focus item',
+    ]);
+  });
 });

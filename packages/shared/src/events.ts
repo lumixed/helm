@@ -11,6 +11,7 @@ export const AGENT_EVENT_TYPES = [
   'agent.error',
   'intake.parsed',
   'brief.generated',
+  'brief.failed',
   'change.detected',
   'change.applied',
   'plan.updated',
@@ -19,6 +20,11 @@ export const AGENT_EVENT_TYPES = [
   'submission.submitted',
   'submission.failed',
   'alert.sent',
+  'egress.blocked',
+  'egress.allowed',
+  'sandbox.created',
+  'sandbox.command',
+  'sandbox.ended',
 ] as const;
 
 export const AgentEventType = z.enum(AGENT_EVENT_TYPES);
