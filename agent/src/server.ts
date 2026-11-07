@@ -6,18 +6,21 @@ import {
   encodeAgentMessage,
   type ScheduleEntry,
 } from '@helm/shared';
-import { config } from './config';
+import { config, runtime } from './config';
 import { Emitter } from './emit';
 import { Dedupe } from './dedupe';
 import { handleMessage } from './handlers';
 
 export function buildSchedules(): ScheduleEntry[] {
-  const studentId = config.studentId || 'unknown';
+  const rt = runtime();
+  // Without a student there is nobody to brief; publish nothing rather than a broken schedule.
+  if (!rt.studentId) return [];
+  const studentId = rt.studentId;
   return [
     {
       id: 'morning-brief',
-      cron: dailyCron(config.briefTime),
-      tz: config.timezone,
+      cron: dailyCron(rt.briefTime),
+      tz: rt.timezone,
       prompt: encodeAgentMessage({
         v: 1,
         type: 'brief.generate',
@@ -29,7 +32,7 @@ export function buildSchedules(): ScheduleEntry[] {
     },
     {
       id: 'heartbeat',
-      cron: config.heartbeatCron,
+      cron: rt.heartbeatCron,
       tz: 'UTC',
       prompt: encodeAgentMessage({
         v: 1,
@@ -50,14 +53,17 @@ export function createApp(deps: { emitter?: Emitter; dedupe?: Dedupe } = {}) {
   // Health must be fast and side-effect free (Maritime contract).
   app.get('/health', (c) => c.json({ ok: true }));
 
-  app.get('/', (c) =>
-    c.json({
+  app.get('/', (c) => {
+    const rt = runtime();
+    return c.json({
       agent: 'helm',
       version: config.version,
-      studentId: config.studentId || null,
+      studentId: rt.studentId || null,
+      configSource: rt.source,
+      configError: rt.error ?? null,
       backendConfigured: emitter.configured,
-    }),
-  );
+    });
+  });
 
   app.get('/schedules', (c) => c.json(buildSchedules()));
 

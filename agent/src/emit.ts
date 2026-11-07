@@ -1,25 +1,44 @@
 import fs from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import { AgentEvent, type AgentEventInput, type AgentEventsRequest } from '@helm/shared';
-import { config, paths } from './config';
+import { paths, runtime } from './config';
 
 /**
  * Sends timeline events to the backend. If the backend is unreachable, events are queued on
  * /data and retried on the next wake, so nothing is lost while the VM sleeps (PRD section 7).
  */
+export interface EmitterTarget {
+  backendUrl: string;
+  token: string;
+  studentId: string;
+}
+
+export interface EmitterOptions {
+  /** Where to send events. Defaults to the live runtime config (file, then env). */
+  target?: () => EmitterTarget;
+  outbox?: string;
+  fetch?: typeof fetch;
+}
+
 export class Emitter {
-  constructor(
-    private readonly opts = {
-      backendUrl: config.backendUrl,
-      token: config.agentToken,
-      studentId: config.studentId,
-      outbox: paths.outbox,
-      fetch: globalThis.fetch,
-    },
-  ) {}
+  private readonly target: () => EmitterTarget;
+  private readonly outbox: string;
+  private readonly fetchImpl: typeof fetch;
+
+  constructor(opts: EmitterOptions = {}) {
+    this.target =
+      opts.target ??
+      (() => {
+        const r = runtime();
+        return { backendUrl: r.backendUrl, token: r.agentToken, studentId: r.studentId };
+      });
+    this.outbox = opts.outbox ?? paths.outbox;
+    this.fetchImpl = opts.fetch ?? globalThis.fetch;
+  }
 
   get configured(): boolean {
-    return Boolean(this.opts.backendUrl && this.opts.token && this.opts.studentId);
+    const t = this.target();
+    return Boolean(t.backendUrl && t.token && t.studentId);
   }
 
   event(
@@ -55,18 +74,19 @@ export class Emitter {
   private async flushOnce(): Promise<{ sent: number; queued: number }> {
     const pending = this.read();
     if (pending.length === 0) return { sent: 0, queued: 0 };
-    if (!this.configured) return { sent: 0, queued: pending.length };
+    const t = this.target();
+    if (!(t.backendUrl && t.token && t.studentId)) return { sent: 0, queued: pending.length };
 
     let sent = 0;
     for (let i = 0; i < pending.length; i += 100) {
       const batch = pending.slice(i, i + 100);
-      const body: AgentEventsRequest = { studentId: this.opts.studentId, events: batch };
+      const body: AgentEventsRequest = { studentId: t.studentId, events: batch };
       try {
-        const res = await this.opts.fetch(`${this.opts.backendUrl}/api/agent/events`, {
+        const res = await this.fetchImpl(`${t.backendUrl}/api/agent/events`, {
           method: 'POST',
           headers: {
             'content-type': 'application/json',
-            authorization: `Bearer ${this.opts.token}`,
+            authorization: `Bearer ${t.token}`,
           },
           body: JSON.stringify(body),
           signal: AbortSignal.timeout(8000),
@@ -89,13 +109,13 @@ export class Emitter {
   }
 
   private append(events: AgentEvent[]) {
-    fs.appendFileSync(this.opts.outbox, events.map((e) => JSON.stringify(e) + '\n').join(''));
+    fs.appendFileSync(this.outbox, events.map((e) => JSON.stringify(e) + '\n').join(''));
   }
 
   private read(): AgentEvent[] {
     let text: string;
     try {
-      text = fs.readFileSync(this.opts.outbox, 'utf8');
+      text = fs.readFileSync(this.outbox, 'utf8');
     } catch {
       return [];
     }
@@ -113,8 +133,8 @@ export class Emitter {
   }
 
   private write(events: AgentEvent[]) {
-    const tmp = `${this.opts.outbox}.tmp`;
+    const tmp = `${this.outbox}.tmp`;
     fs.writeFileSync(tmp, events.map((e) => JSON.stringify(e) + '\n').join(''));
-    fs.renameSync(tmp, this.opts.outbox);
+    fs.renameSync(tmp, this.outbox);
   }
 }

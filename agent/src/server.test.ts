@@ -9,6 +9,7 @@ let dir: string;
 async function setup(fetchImpl?: typeof fetch) {
   dir = fs.mkdtempSync(path.join(os.tmpdir(), 'helm-agent-'));
   process.env.HELM_DATA_DIR = dir;
+  writeConfig(dir, { briefTime: '07:30', timezone: 'America/Vancouver' });
   vi.resetModules();
   const { createApp } = await import('./server');
   const { Emitter } = await import('./emit');
@@ -21,9 +22,7 @@ async function setup(fetchImpl?: typeof fetch) {
       return new Response(JSON.stringify({ accepted: 1, duplicates: 0 }), { status: 200 });
     });
   const emitter = new Emitter({
-    backendUrl: 'https://backend.test',
-    token: 't',
-    studentId: 's1',
+    target: () => ({ backendUrl: 'https://backend.test', token: 't', studentId: 's1' }),
     outbox: path.join(dir, 'outbox.jsonl'),
     fetch: fakeFetch as typeof fetch,
   });
@@ -35,6 +34,19 @@ async function setup(fetchImpl?: typeof fetch) {
       body: JSON.stringify({ message, source }),
     });
   return { app, chat, calls, dir };
+}
+
+function writeConfig(d: string, extra: Record<string, unknown> = {}) {
+  fs.mkdirSync(path.join(d, 'helm'), { recursive: true });
+  fs.writeFileSync(
+    path.join(d, 'helm', 'config.json'),
+    JSON.stringify({
+      studentId: 's1',
+      backendUrl: 'https://backend.test/',
+      agentToken: 'a'.repeat(43),
+      ...extra,
+    }),
+  );
 }
 
 const ping = encodeAgentMessage({ v: 1, type: 'ping', requestId: 'req-1', studentId: 's1' });
@@ -130,5 +142,32 @@ describe('agent http contract', () => {
       headers: { 'content-type': 'application/json' },
     });
     expect(res.status).toBe(400);
+  });
+
+  it('reads live settings from the config file and picks up changes', async () => {
+    const { app } = await setup();
+    const status = (await (await app.request('/')).json()) as Record<string, unknown>;
+    expect(status).toMatchObject({ studentId: 's1', configSource: 'file', configError: null });
+
+    // Brief time changes land in /schedules without a restart.
+    await new Promise((r) => setTimeout(r, 20)); // ensure a new mtime
+    writeConfig(dir, { briefTime: '08:15', timezone: 'Asia/Jakarta' });
+    const body = (await (await app.request('/schedules')).json()) as Array<Record<string, unknown>>;
+    expect(body[0]).toMatchObject({ cron: '15 8 * * *', tz: 'Asia/Jakarta' });
+  });
+
+  it('publishes no schedules before the student is configured', async () => {
+    const { app } = await setup();
+    fs.rmSync(path.join(dir, 'helm', 'config.json'));
+    delete process.env.HELM_STUDENT_ID;
+    expect(await (await app.request('/schedules')).json()).toEqual([]);
+  });
+
+  it('reports an invalid config file instead of crashing', async () => {
+    const { app } = await setup();
+    await new Promise((r) => setTimeout(r, 20));
+    fs.writeFileSync(path.join(dir, 'helm', 'config.json'), '{"studentId": 5}');
+    const status = (await (await app.request('/')).json()) as Record<string, unknown>;
+    expect(String(status.configError)).toMatch(/config file invalid/);
   });
 });
