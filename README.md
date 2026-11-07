@@ -6,9 +6,9 @@ submits their finished work on time with a last-chance hold and a receipt.
 
 Built at HackCamp 2026. Full spec: [`docs/PRD.md`](docs/PRD.md).
 
-> **Status: Phase 0 (foundations).** The agent container, the shared protocol and the agent → backend
-> events API work and are tested locally. Deploying to Maritime (Gate G1) is waiting on the Maritime
-> account's free trial. See [`docs/maritime-notes.md`](docs/maritime-notes.md).
+> **Status: Phase 0.** The agent is deployed on Maritime and answers chat and webhooks (Gate G1).
+> Still open: agent → backend calls on Maritime, which need an API key with the `secrets` scope.
+> See [`docs/maritime-notes.md`](docs/maritime-notes.md).
 
 ## Layout
 

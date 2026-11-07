@@ -38,7 +38,8 @@ Source: `/docs/triggers`, `/docs/api#webhooks`
 - Token: `GET /api/webhooks/{agent_id}/token` (owner). Rotate: `POST …/token/rotate` (needs `manage` scope).
 - Rate limit: 30/min per caller IP per agent, **shared with the agent's message budget**. A burst returns `429` with `Retry-After` and is **not queued** by Maritime, so the backend must queue and retry.
 - Calls without a token are accepted for now but will be refused once enforcement turns on. Always send it.
-- **UNVERIFIED:** the exact shape of `message` for a webhook delivery (raw JSON string, wrapped, or prefixed text). `parseInbound` in `packages/shared` accepts all of these. `scripts/g1-spike.sh` turns on `HELM_DEBUG_INBOUND=1` to log it. Record the answer here.
+- **Verified 2026-11-07 (G1 spike):** posting our JSON envelope as the webhook body returns `202 {"status":"accepted"}`. The agent gets it on `POST /chat` with `source: "webhook"`, and `parseInbound` recognizes it as a protocol message. The platform log line is "Webhook received with 5 keys". The exact `message` string wasn't captured (debug logging needs env vars, see the scope issue below), but parsing works, which is what matters.
+- Chat API calls arrive with `source: "cli"`.
 
 ## Provisioning one agent per student
 
@@ -75,12 +76,34 @@ Sources: `/docs/builds`, `/docs/images`, CLI help
 
 - `maxAwakeMachines: 5` on Starter/trial. Waking a 6th returns `429 awake_limit_reached` (retry 15 s). Fine for a 2-student demo; the scheduler must handle 429.
 - `agentCreatesPerMinute: 30`.
-- **Our account currently has `plan: none`, `blockedReason: card_required`.** Someone on the team must start the free trial (Billing page, card required, $20 usage cap) before any agent can be created.
+- Trial started 2026-11-07 (`plan: starter`, `state: active`).
+
+## G1 spike results (2026-11-07)
+
+Agent `helm-g1` (`ff993841-ea17-4ad9-b12d-205d2f6a6094`), created with `maritime agents create --framework custom --from-dir agent/.deploy`.
+
+| Check                           | Result                                                                                                                                                           |
+| ------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Upload + build + boot           | ✅ `deploying` → `active` in ~4 min (first build, cold builder)                                                                                                  |
+| `POST /api/agents/{id}/chat`    | ✅ `pong` in 1.4 s, `source: "cli"`                                                                                                                              |
+| Free-text chat                  | ✅ canned reply, no action taken                                                                                                                                 |
+| Webhook invoke                  | ✅ `202 accepted`, delivered to `/chat` with `source: "webhook"`                                                                                                 |
+| Idempotency on `/data`          | ✅ `processed.json` holds `chat-1`, `webhook-1`                                                                                                                  |
+| Files API read of `/data`       | ✅ `files/list` reports `root: /data`; `files/download` works                                                                                                    |
+| `GET /schedules` sync           | ✅ `maritime triggers list` shows `byo:morning-brief` cron `30 7 * * *` tz `America/Vancouver` (`source: byo_sync`)                                              |
+| Agent → backend                 | ⏳ events queued in `/data/outbox.jsonl`; needs `HELM_BACKEND_URL` + token env vars                                                                              |
+| Container stdout in `GET /logs` | ❌ our `console.log` lines don't appear there (only platform and `[auto-pair]` lines). For debugging, use the Files API (`/data`) or events sent to the backend. |
+
+**Blocker found:** `maritime env set` returns `403 "This API key lacks the 'secrets' scope"`. The backend needs that scope for M2 (per-student `HELM_AGENT_TOKEN`, `GEMINI_API_KEY`, portal creds). Fix: mint a key that has the `secrets` scope (Settings → API keys → Advanced, or a full-access default key).
+
+Create response JSON shape: `.results.data.id` (CLI wraps responses in `{meta, results}`).
 
 ## Open items
 
-- [ ] Start the Maritime free trial (blocks everything below).
-- [ ] Run `scripts/g1-spike.sh`. Record: build time, boot status values, webhook `message` shape, whether `/schedules` entries appear in `maritime triggers list`, and wake latency.
+- [x] Start the Maritime free trial.
+- [x] Run `scripts/g1-spike.sh` (results above).
+- [ ] Get an API key with the `secrets` scope, set env on `helm-g1`, and confirm agent → backend events arrive.
+- [ ] Measure wake-from-sleep latency (wait > 300 s idle, then chat).
 - [ ] Confirm the SDK/REST field for a custom image or upload key in `endUsers.createAgent`.
 - [ ] Confirm whether a ZIP source can be redeployed onto an existing agent (needed so every student agent gets new versions). Fallback: GitHub source (needs the Maritime GitHub App on `lumixed/helm`) or a public GHCR image.
 - [ ] Which lifecycle webhooks exist (`agent.sleeping` is shown in the end-users docs). Use them for the timeline if available.

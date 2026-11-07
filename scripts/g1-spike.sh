@@ -38,7 +38,7 @@ else
   out=$(maritime agents create --name "$NAME" --framework custom --from-dir agent/.deploy \
     --external-id "$STUDENT_ID" --idle-ttl-seconds 300 --json)
   echo "$out" | jq '.results // .' | head -40
-  AGENT_ID=$(echo "$out" | jq -r '.results.id // .id')
+  AGENT_ID=$(echo "$out" | jq -r '.results.data.id // .results.id // .data.id // .id')
 fi
 echo "AGENT_ID=$AGENT_ID"
 
