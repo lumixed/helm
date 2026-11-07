@@ -28,7 +28,7 @@ export async function readDocumentText(filePath: string): Promise<string> {
     throw new DocumentError(`Helm can read PDF, DOCX and TXT files, not ${ext}.`);
   }
   text = text
-    .replace(/\u0000/g, '')
+    .replaceAll('\u0000', '') // NUL bytes from some PDFs
     .replace(/[ \t]+\n/g, '\n')
     .trim();
   if (text.length < 40) {
