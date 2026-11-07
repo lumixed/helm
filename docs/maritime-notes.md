@@ -117,6 +117,14 @@ Create response JSON shape: `.results.data.id` (CLI wraps responses in `{meta, r
 - **Upgrading an existing agent's image** works with `maritime deploy <id> --source docker --image <digest> --wait` (110 s). `/data` was kept.
 - Image for agent 0.3.0: `ghcr.io/maritime-sh/maritime-agent-builds@sha256:404bdaedbe58caaf09f1304ef4d0f3184dbab579189fa5590d9eda6496698c9d` (built by agent `helm-image-v0-3`).
 
+## Gemini (verified 2026-11-07)
+
+- We call Gemini through its **OpenAI-compatible endpoint** (`https://generativelanguage.googleapis.com/v1beta/openai/chat/completions`) with `Authorization: Bearer <GEMINI_API_KEY>` and `response_format: {type: "json_schema", ...}`. Nullable fields as `"type": ["string", "null"]` are accepted.
+- `gemini-2.5-flash` is retired for new users. Available: 3.5/3.6/3.7/3.8-flash, `gemini-flash-latest`, and others.
+- Load that day: 3.8-flash and 3.7-flash timed out at 30 s+, 3.5-flash and flash-latest sometimes returned 503 "high demand", and 3.6-flash was reliable (~18 s per syllabus). The agent tries models in order and retries once per model with the validation error.
+- Syllabus eval (`pnpm --filter @helm/agent eval`, 2 fictional syllabi, 15 deadlines): **15/15 due dates and 15/15 weights correct**. The embedded prompt injection was ignored and reported as a warning.
+- Local scripts in this sandbox need `NODE_USE_ENV_PROXY=1` for Node's `fetch` to use the proxy.
+
 ## Open items
 
 - [x] Start the Maritime free trial.

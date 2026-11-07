@@ -1,0 +1,90 @@
+{
+  "_doc": "Ground truth for the syllabus extraction eval. dueLocal is local wall time; null = no usable date. A row matches when course + a title keyword match; dueLocal must match exactly unless 'dueDateOnly' is set (then only the date part is checked).",
+  "data210.txt": {
+    "timezone": "America/Vancouver",
+    "rows": [
+      {
+        "course": "DATA 210",
+        "title": "Assignment 1",
+        "dueLocal": "2026-09-18T23:59",
+        "weightPct": 8
+      },
+      {
+        "course": "DATA 210",
+        "title": "Assignment 2",
+        "dueLocal": "2026-10-02T17:00",
+        "weightPct": 8
+      },
+      {
+        "course": "DATA 210",
+        "title": "Midterm",
+        "dueLocal": "2026-10-14T10:00",
+        "weightPct": 20,
+        "dueDateOnly": true
+      },
+      {
+        "course": "DATA 210",
+        "title": "Assignment 3",
+        "dueLocal": "2026-10-26T23:59",
+        "weightPct": 8
+      },
+      { "course": "DATA 210", "title": "proposal", "dueLocal": "2026-11-06T12:00", "weightPct": 0 },
+      {
+        "course": "DATA 210",
+        "title": "Assignment 4",
+        "dueLocal": "2026-11-13T23:59",
+        "weightPct": 8
+      },
+      {
+        "course": "DATA 210",
+        "title": "Final project",
+        "dueLocal": "2026-12-03T23:59",
+        "weightPct": 30
+      }
+    ],
+    "mustNot": ["every weight zero", "status changes"]
+  },
+  "engl150.txt": {
+    "timezone": "America/Vancouver",
+    "rows": [
+      {
+        "course": "ENGL 150",
+        "title": "Reading response",
+        "dueLocal": "2026-09-22T14:00",
+        "weightPct": 3
+      },
+      {
+        "course": "ENGL 150",
+        "title": "Reading response",
+        "dueLocal": "2026-10-06T14:00",
+        "weightPct": 3
+      },
+      {
+        "course": "ENGL 150",
+        "title": "Reading response",
+        "dueLocal": "2026-10-20T14:00",
+        "weightPct": 3
+      },
+      {
+        "course": "ENGL 150",
+        "title": "Reading response",
+        "dueLocal": "2026-11-03T14:00",
+        "weightPct": 3
+      },
+      {
+        "course": "ENGL 150",
+        "title": "Reading response",
+        "dueLocal": "2026-11-17T14:00",
+        "weightPct": 3
+      },
+      { "course": "ENGL 150", "title": "Essay 1", "dueLocal": "2026-10-16T17:00", "weightPct": 20 },
+      { "course": "ENGL 150", "title": "Essay 2", "dueLocal": "2026-11-24T23:59", "weightPct": 30 },
+      {
+        "course": "ENGL 150",
+        "title": "reflection",
+        "dueLocal": "2026-12-08T23:59",
+        "weightPct": 25
+      }
+    ]
+  }
+}
