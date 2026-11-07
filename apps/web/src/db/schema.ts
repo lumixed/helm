@@ -107,7 +107,8 @@ export const courses = pgTable(
     scheduleJson: jsonb('schedule_json').$type<CourseMeeting[]>().notNull().default([]),
     createdAt: createdAt(),
   },
-  (t) => [uniqueIndex('courses_user_code_uq').on(t.userId, sql`upper(${t.code})`)],
+  // Course codes are normalized ("DATA 210") before writing, so a plain index is enough.
+  (t) => [uniqueIndex('courses_user_code_key').on(t.userId, t.code)],
 );
 
 export interface CourseMeeting {

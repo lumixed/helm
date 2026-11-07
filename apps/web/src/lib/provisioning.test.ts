@@ -49,12 +49,41 @@ function fakeMaritime() {
       state.agents.set(a.id, a);
       return { agent: { id: a.id, name: externalId, status: a.status, externalId }, created: true };
     },
+    async listAgents() {
+      return [
+        {
+          id: 'r1',
+          name: 'helm-image-v0-3',
+          status: 'sleeping' as const,
+          externalId: null,
+          imageName: 'img@sha256:old',
+          createdAt: '2026-11-07T21:00:00Z',
+        },
+        {
+          id: 'r2',
+          name: 'helm-image-v0-4',
+          status: 'active' as const,
+          externalId: null,
+          imageName: 'img@sha256:new',
+          createdAt: '2026-11-07T22:00:00Z',
+        },
+        {
+          id: 'r3',
+          name: 'user_x',
+          status: 'active' as const,
+          externalId: 'user_x',
+          imageName: 'img@sha256:other',
+          createdAt: '2026-11-07T23:00:00Z',
+        },
+      ];
+    },
     async getAgent(id) {
       const a = state.agents.get(id);
       if (!a) throw new MaritimeError(404, 'not found', `/api/agents/${id}`);
       return { id, name: a.externalId, status: a.status, externalId: a.externalId };
     },
     async mkdir() {},
+    async uploadFile() {},
     async writeFile(id, path, content) {
       state.files.set(`${id}:${path}`, content);
     },
@@ -140,6 +169,14 @@ describe('ensureStudentAgent', () => {
     const row = await ensureStudentAgent(db, user, client, env);
     expect(row.status).toBe('error');
     expect(row.lastError).toMatch(/older token/);
+  });
+});
+
+describe('MARITIME_AGENT_IMAGE=auto', () => {
+  it('uses the newest helm-image-* release', async () => {
+    const { client, state } = fakeMaritime();
+    await ensureStudentAgent(db, user, client, { ...env, agentImage: 'auto' });
+    expect(state.agents.get('mt_1')!.input.imageName).toBe('img@sha256:new');
   });
 });
 

@@ -3,7 +3,9 @@ import { getDb, schema } from '@/db';
 import { fail, json, readBody } from '@/lib/http';
 import {
   deleteStudent,
+  ensureLocalAgent,
   ensureStudentAgent,
+  localAgentDir,
   provisionEnvFromProcess,
   refreshAgent,
   writeAgentSettings,
@@ -20,7 +22,11 @@ export async function GET() {
   const db = await getDb();
   const maritime = maritimeOrNull();
   let agent = null;
-  if (maritime) {
+  const localDir = localAgentDir();
+  if (localDir) {
+    const [row] = await db.select().from(schema.agents).where(eq(schema.agents.userId, user.id));
+    agent = row ?? (await ensureLocalAgent(db, user, localDir));
+  } else if (maritime) {
     agent = await refreshAgent(db, user, maritime);
     if (!agent || (agent.status === 'error' && !agent.maritimeAgentId)) {
       agent = await ensureStudentAgent(db, user, maritime, provisionEnvFromProcess());
@@ -45,7 +51,11 @@ export async function PATCH(req: Request) {
   // Brief time / timezone changes reach the agent's schedule through its settings file (M5).
   const maritime = maritimeOrNull();
   let synced = false;
-  if (maritime && (body.timezone || body.briefTimeLocal)) {
+  const localDir = localAgentDir();
+  if (localDir) {
+    await ensureLocalAgent(db, updated!, localDir);
+    synced = true;
+  } else if (maritime && (body.timezone || body.briefTimeLocal)) {
     try {
       await writeAgentSettings(db, updated!, maritime);
       synced = true;

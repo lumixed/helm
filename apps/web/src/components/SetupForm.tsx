@@ -53,7 +53,7 @@ export function SetupForm({ profile }: { profile: Profile }) {
       return;
     }
     setMessage({ kind: 'ok', text: 'Saved.' });
-    if (!profile.onboarded) router.push('/today');
+    if (!profile.onboarded) router.push('/intake');
     else router.refresh();
   }
 

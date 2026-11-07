@@ -53,6 +53,29 @@ const STATUS_MAP: Record<MaritimeAgentStatus, AgentRow['status']> = {
 };
 
 /**
+ * MARITIME_AGENT_IMAGE=auto: use the image of the newest active agent named "helm-image-*". Those
+ * agents are built by scripts/upgrade-agents.sh, so shipping a new agent needs no env change.
+ */
+let imageCache: { at: number; image: string } | null = null;
+export async function latestReleaseImage(
+  maritime: MaritimeClient,
+  now = Date.now(),
+): Promise<string> {
+  if (imageCache && now - imageCache.at < 5 * 60_000) return imageCache.image;
+  const releases = (await maritime.listAgents())
+    .filter((a) => a.name.startsWith('helm-image-') && a.imageName && a.status !== 'error')
+    .sort(
+      (a, b) =>
+        (b.createdAt ?? '').localeCompare(a.createdAt ?? '') ||
+        b.name.localeCompare(a.name, undefined, { numeric: true }),
+    );
+  const image = releases[0]?.imageName;
+  if (!image) throw new Error('No helm-image-* agent found. Run scripts/upgrade-agents.sh first.');
+  imageCache = { at: now, image };
+  return image;
+}
+
+/**
  * Get or create the student's agent. Safe to call on every sign-in and page load:
  * one `agents` row per user (unique), and Maritime's createAgent is idempotent on externalId.
  */
@@ -93,8 +116,9 @@ export async function ensureStudentAgent(
 
   const externalId = externalIdFor(user.id);
   try {
+    if (env.agentImage === 'auto') env = { ...env, agentImage: await latestReleaseImage(maritime) };
     if (!env.agentImage && !env.agentUploadKey) {
-      throw new Error('Set MARITIME_AGENT_IMAGE or MARITIME_AGENT_UPLOAD_KEY');
+      throw new Error('Set MARITIME_AGENT_IMAGE (or "auto") or MARITIME_AGENT_UPLOAD_KEY');
     }
     await maritime.upsertEndUser(externalId, {
       displayName: user.name || 'Helm student',
@@ -246,4 +270,48 @@ function describe(err: unknown): string {
     return `Maritime error ${err.status}: ${err.detail}`.slice(0, 500);
   }
   return String(err instanceof Error ? err.message : err).slice(0, 500);
+}
+
+/**
+ * Local development: one agent on this machine (`pnpm dev:agent`) instead of Maritime. The agent
+ * gets its identity through the settings file, which is acceptable only on a developer machine.
+ */
+export async function ensureLocalAgent(db: Db, user: User, dataDir: string): Promise<AgentRow> {
+  const { token, hash } = generateAgentToken();
+  const existing = await getAgentRow(db, user.id);
+  if (existing)
+    await setAgent(db, existing.id, {
+      agentTokenHash: hash,
+      maritimeAgentId: 'local',
+      status: 'ready',
+      lastError: null,
+    });
+  else
+    await db
+      .insert(schema.agents)
+      .values({ userId: user.id, agentTokenHash: hash, maritimeAgentId: 'local', status: 'ready' });
+  const fs = await import('node:fs/promises');
+  const path = await import('node:path');
+  const file = path.join(dataDir, 'helm', 'config.json');
+  await fs.mkdir(path.dirname(file), { recursive: true });
+  const settings = {
+    ...(JSON.parse(agentSettings(user)) as object),
+    studentId: user.id,
+    agentToken: token,
+  };
+  await fs.writeFile(file, JSON.stringify(AgentRuntimeConfig.parse(settings), null, 2));
+  const row = (await getAgentRow(db, user.id))!;
+  await setAgent(db, row.id, {
+    configWrittenAt: new Date(),
+    configHash: hashSettings(agentSettings(user)),
+  });
+  return (await getAgentRow(db, user.id))!;
+}
+
+export function localAgentDir(): string | null {
+  return process.env.HELM_LOCAL_AGENT_URL &&
+    process.env.HELM_LOCAL_AGENT_DATA_DIR &&
+    !process.env.VERCEL
+    ? process.env.HELM_LOCAL_AGENT_DATA_DIR
+    : null;
 }

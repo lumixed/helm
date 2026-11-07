@@ -21,6 +21,9 @@ export const AgentRuntimeConfig = z.object({
   briefTime: z.string().regex(HHMM).optional(),
   heartbeatCron: z.string().optional(),
   demoMode: z.boolean().optional(),
+  /** LOCAL DEVELOPMENT ONLY (HELM_LOCAL_AGENT_URL). Production passes these as encrypted env. */
+  studentId: z.string().min(1).max(128).optional(),
+  agentToken: z.string().min(20).max(200).optional(),
 });
 export type AgentRuntimeConfig = z.infer<typeof AgentRuntimeConfig>;
 export type AgentRuntimeConfigInput = z.input<typeof AgentRuntimeConfig>;

@@ -61,6 +61,8 @@ export function runtime(file = paths.runtimeConfig): Runtime {
       const f = parsed.data;
       value = {
         ...fromEnv,
+        studentId: f.studentId ?? fromEnv.studentId,
+        agentToken: f.agentToken ?? fromEnv.agentToken,
         backendUrl: f.backendUrl ? f.backendUrl.replace(/\/+$/, '') : fromEnv.backendUrl,
         timezone: f.timezone ?? fromEnv.timezone,
         briefTime: f.briefTime ?? fromEnv.briefTime,

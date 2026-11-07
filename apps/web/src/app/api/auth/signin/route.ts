@@ -2,7 +2,12 @@ import { z } from 'zod';
 import { getDb, schema } from '@/db';
 import type { User } from '@/db/schema';
 import { fail, json, readBody } from '@/lib/http';
-import { ensureStudentAgent, provisionEnvFromProcess } from '@/lib/provisioning';
+import {
+  ensureLocalAgent,
+  ensureStudentAgent,
+  localAgentDir,
+  provisionEnvFromProcess,
+} from '@/lib/provisioning';
 import { setSessionCookie } from '@/lib/session';
 import { maritimeOrNull, publicProfile } from '@/lib/student';
 
@@ -32,7 +37,10 @@ export async function POST(req: Request) {
   // Provision the student's private agent right away (PRD J1 step 1). Idempotent.
   const maritime = maritimeOrNull();
   let agent = null;
-  if (maritime) {
+  const localDir = localAgentDir();
+  if (localDir) {
+    agent = await ensureLocalAgent(db, user, localDir);
+  } else if (maritime) {
     try {
       agent = await ensureStudentAgent(db, user, maritime, provisionEnvFromProcess());
     } catch (err) {

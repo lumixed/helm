@@ -50,8 +50,14 @@ export interface MaritimeClient {
     input: CreateAgentInput,
   ): Promise<{ agent: MaritimeAgent; created: boolean }>;
   getAgent(agentId: string): Promise<MaritimeAgent>;
+  listAgents(): Promise<(MaritimeAgent & { createdAt?: string })[]>;
   mkdir(agentId: string, path: string): Promise<void>;
   writeFile(agentId: string, path: string, content: string): Promise<void>;
+  /** Multipart upload into an exact volume directory (dest_dir). Wakes the agent. */
+  uploadFile(
+    agentId: string,
+    file: { bytes: Uint8Array; filename: string; destDir: string },
+  ): Promise<void>;
   webhookToken(agentId: string): Promise<string>;
   invokeWebhook(agentId: string, token: string, body: string): Promise<void>;
   setPolicy(externalId: string, policy: Record<string, number>): Promise<void>;
@@ -125,11 +131,29 @@ export function createMaritimeClient(opts: {
     async getAgent(agentId) {
       return (await call<MaritimeAgent>('GET', `/api/agents/${enc(agentId)}`)).data;
     },
+    async listAgents() {
+      const { data } = await call<unknown>('GET', '/api/agents');
+      const list = Array.isArray(data) ? data : ((data as { results?: unknown[] })?.results ?? []);
+      return list as (MaritimeAgent & { createdAt?: string })[];
+    },
     async mkdir(agentId, path) {
       await call('POST', `/api/agents/${enc(agentId)}/files/mkdir`, { path });
     },
     async writeFile(agentId, path, content) {
       await call('PUT', `/api/agents/${enc(agentId)}/files/write`, { path, content });
+    },
+    async uploadFile(agentId, file) {
+      const form = new FormData();
+      form.append('file', new Blob([file.bytes as BlobPart]), file.filename);
+      form.append('dest_dir', file.destDir);
+      const res = await doFetch(`${base}/api/agents/${enc(agentId)}/files/upload`, {
+        method: 'POST',
+        headers: { authorization: `Bearer ${opts.apiKey}` },
+        body: form,
+        signal: AbortSignal.timeout(60_000),
+      });
+      if (!res.ok)
+        throw new MaritimeError(res.status, (await res.text()).slice(0, 300), '/files/upload');
     },
     async webhookToken(agentId) {
       return (await call<{ token: string }>('GET', `/api/webhooks/${enc(agentId)}/token`)).data

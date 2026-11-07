@@ -58,6 +58,29 @@ export MARITIME_API_KEY=mk_...
 scripts/g1-spike.sh helm-g1
 ```
 
+## Ship a new agent version
+
+```bash
+export MARITIME_API_KEY=mk_...
+scripts/upgrade-agents.sh v0-5
+```
+
+This builds the agent on Maritime as `helm-image-v0-5` and moves every student's agent onto it, keeping their `/data`. With `MARITIME_AGENT_IMAGE=auto` on the backend, new sign-ups use it automatically.
+
+## Run everything locally
+
+```bash
+pnpm --filter @helm/agent build
+PORT=8787 HELM_DATA_DIR=/tmp/helm-agent GEMINI_API_KEY=... node agent/.deploy/server.mjs
+# in apps/web/.env.local:
+#   HELM_LOCAL_AGENT_URL=http://127.0.0.1:8787
+#   HELM_LOCAL_AGENT_DATA_DIR=/tmp/helm-agent
+#   APP_BASE_URL=http://127.0.0.1:3000   AUTH_SECRET=...   DEMO_MODE=true
+pnpm dev
+```
+
+The app talks to the local agent instead of Maritime, using the same messages. Without `DATABASE_URL` it uses an in-memory database.
+
 ## Guardrails
 
 - Helm **never writes, edits or improves** a student's assignment. It only handles logistics.
