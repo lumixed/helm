@@ -191,4 +191,94 @@ describe('agent http contract', () => {
     expect(runtime().backendUrl).toBe('https://new.example');
     delete process.env.HELM_BACKEND_URL;
   });
+
+  it('intake.parse reads the file, sends structured results only, and logs the timeline', async () => {
+    const { createApp } = await import('./server');
+    const { Emitter } = await import('./emit');
+    const { Dedupe } = await import('./dedupe');
+    await setup();
+    fs.mkdirSync(path.join(dir, 'inbox'), { recursive: true });
+    fs.copyFileSync(
+      path.join(import.meta.dirname, '../fixtures/syllabi/engl150.txt'),
+      path.join(dir, 'inbox', 'engl.txt'),
+    );
+    const posted: { path: string; body: Record<string, unknown> }[] = [];
+    const events: string[] = [];
+    const emitter = new Emitter({
+      target: () => ({ backendUrl: 'https://b.test', token: 't', studentId: 's1' }),
+      outbox: path.join(dir, 'outbox2.jsonl'),
+      fetch: (async (_u: string | URL | Request, init?: RequestInit) => {
+        for (const e of JSON.parse(String(init?.body)).events)
+          events.push(`${e.type}: ${e.reason}`);
+        return new Response('{}');
+      }) as typeof fetch,
+    });
+    const app = createApp({
+      emitter,
+      dedupe: new Dedupe(path.join(dir, 'p2.json')),
+      handlerDeps: {
+        dataDir: dir,
+        extract: async (text) => {
+          expect(text).toMatch(/Essay 1/);
+          return {
+            model: 'fake',
+            warnings: [],
+            assignments: [
+              {
+                courseCode: 'ENGL 150',
+                title: 'Essay 1',
+                dueAt: '2026-10-17T00:00:00.000Z',
+                dueTimeAssumed: false,
+                weightPct: 20,
+                type: 'assignment',
+                allowedFileTypes: ['pdf'],
+                confidence: 0.6,
+              },
+            ],
+          };
+        },
+        post: async (p, body) => {
+          posted.push({ path: p, body: body as Record<string, unknown> });
+          return new Response('{"ok":true}');
+        },
+      },
+    });
+    const msg = encodeAgentMessage({
+      v: 1,
+      type: 'intake.parse',
+      requestId: 'in-1',
+      studentId: 's1',
+      payload: { intakeId: 'i1', filePath: '/data/inbox/engl.txt', fileName: 'engl.txt' },
+    });
+    const res = await app.request('/chat', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ message: msg, source: 'webhook' }),
+    });
+    expect(((await res.json()) as { response: string }).response).toBe(
+      'Found 1 deadlines in engl.txt.',
+    );
+    expect(posted[0]?.path).toBe('/api/agent/intake/result');
+    expect(posted[0]?.body).toMatchObject({ intakeId: 'i1', fileName: 'engl.txt', model: 'fake' });
+    expect(JSON.stringify(posted[0]?.body)).not.toMatch(/Writing About Place/); // no raw syllabus text leaves the VM
+    expect(events).toEqual([
+      'agent.woke: Woke to read a new syllabus',
+      'intake.parsed: Read "engl.txt": found 1 deadlines, 1 to double-check',
+    ]);
+  });
+
+  it('intake.parse refuses paths outside the data dir', async () => {
+    const { chat } = await setup();
+    const msg = encodeAgentMessage({
+      v: 1,
+      type: 'intake.parse',
+      requestId: 'in-2',
+      studentId: 's1',
+      payload: { intakeId: 'i2', filePath: '/etc/passwd', fileName: 'passwd' },
+    });
+    const res = await chat(msg);
+    expect(((await res.json()) as { response: string }).response).toMatch(
+      /outside the agent's storage/,
+    );
+  });
 });

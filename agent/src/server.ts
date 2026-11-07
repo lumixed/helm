@@ -9,7 +9,7 @@ import {
 import { config, runtime } from './config';
 import { Emitter } from './emit';
 import { Dedupe } from './dedupe';
-import { handleMessage } from './handlers';
+import { handleMessage, type HandlerDeps } from './handlers';
 
 export function buildSchedules(): ScheduleEntry[] {
   const rt = runtime();
@@ -45,7 +45,9 @@ export function buildSchedules(): ScheduleEntry[] {
   ];
 }
 
-export function createApp(deps: { emitter?: Emitter; dedupe?: Dedupe } = {}) {
+export function createApp(
+  deps: { emitter?: Emitter; dedupe?: Dedupe; handlerDeps?: Partial<HandlerDeps> } = {},
+) {
   const emitter = deps.emitter ?? new Emitter();
   const dedupe = deps.dedupe ?? new Dedupe();
   const app = new Hono();
@@ -108,7 +110,12 @@ export function createApp(deps: { emitter?: Emitter; dedupe?: Dedupe } = {}) {
       });
     }
 
-    const work = handleMessage(inbound.message, { emitter, dedupe, source });
+    const work = handleMessage(inbound.message, {
+      emitter,
+      dedupe,
+      source,
+      deps: deps.handlerDeps,
+    });
     const winner = await Promise.race([
       work.then((reply) => ({ reply })),
       new Promise<'timeout'>((r) => setTimeout(() => r('timeout'), config.replyBudgetMs)),

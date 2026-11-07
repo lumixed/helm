@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { ExtractedAssignment as ExtractedAssignmentRef } from './domain';
 
 /**
  * Everything the agent reports back to the backend. These become the Agent timeline (M8).
@@ -48,3 +49,16 @@ export const AgentEventsResponse = z.object({
   duplicates: z.number().int(),
 });
 export type AgentEventsResponse = z.infer<typeof AgentEventsResponse>;
+
+/** Agent -> backend: results of reading one syllabus (PRD M3). Only structured data, no raw text. */
+export const IntakeResultRequest = z.object({
+  studentId: z.string().min(1).max(128),
+  requestId: z.string().min(1).max(200),
+  /** The intake this answers; replaces earlier unconfirmed rows from the same intake. */
+  intakeId: z.string().min(1).max(200),
+  fileName: z.string().max(300),
+  model: z.string().max(100),
+  assignments: z.array(z.lazy(() => ExtractedAssignmentRef)).max(200),
+  warnings: z.array(z.string().max(500)).max(50),
+});
+export type IntakeResultRequest = z.infer<typeof IntakeResultRequest>;

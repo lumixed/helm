@@ -50,10 +50,12 @@ export const IntakeParseMessage = z.object({
   ...base,
   type: z.literal('intake.parse'),
   payload: z.object({
+    /** Groups the results; re-parsing the same intake replaces its unconfirmed rows. */
+    intakeId: z.string().min(1).max(200),
     /** Path of the uploaded file on the agent's /data volume. */
-    filePath: z.string().min(1),
-    fileName: z.string().min(1),
-    courseHint: z.string().optional(),
+    filePath: z.string().min(1).max(500),
+    fileName: z.string().min(1).max(300),
+    courseHint: z.string().max(100).optional(),
   }),
 });
 
