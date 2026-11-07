@@ -62,6 +62,7 @@ export async function saveIntakeResult(
   userId: string,
   intakeId: string,
   rows: ExtractedAssignment[],
+  source: 'syllabus' | 'email' = 'syllabus',
 ) {
   const courseIds = new Map<string, string>();
   for (const code of new Set(rows.map((r) => normalizeCourseCode(r.courseCode)).filter(Boolean))) {
@@ -97,7 +98,7 @@ export async function saveIntakeResult(
       weightPct: r.weightPct,
       type: r.type,
       allowedFileTypes: r.allowedFileTypes,
-      source: 'syllabus' as const,
+      source,
       sourceRef: intakeId,
       confidence: r.confidence,
       confirmed: false,

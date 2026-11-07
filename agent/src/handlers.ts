@@ -2,7 +2,9 @@ import {
   AgentState,
   utcToLocal,
   type AgentMessage,
+  InboxResultResponse,
   type BriefRequest,
+  type InboxResultRequest,
   type IntakeResultRequest,
 } from '@helm/shared';
 import { z } from 'zod';
@@ -11,6 +13,12 @@ import { geminiJson, LlmError, llmFromEnv } from './llm/gemini';
 import { buildBrief, wordingPrompt, type WordFn } from './tools/brief';
 import { getBackend, postBackend } from './backend';
 import { extractDeadlines, type ExtractOutput } from './tools/extract';
+import {
+  classifyEmail,
+  type ClassifyContext,
+  type ClassifyOutput,
+  type InboundEmail,
+} from './tools/classify-email';
 import { DocumentError, readDocumentText, resolveInside } from './tools/read-document';
 import type { Emitter } from './emit';
 import type { Dedupe } from './dedupe';
@@ -31,6 +39,7 @@ export interface HandlerDeps {
   ) => Promise<ExtractOutput>;
   post: (path: string, body: unknown) => Promise<Response>;
   get: (path: string) => Promise<Response>;
+  classify: (email: InboundEmail, ctx: ClassifyContext) => Promise<ClassifyOutput>;
   word: WordFn;
   now: () => Date;
   dataDir: string;
@@ -40,6 +49,7 @@ const defaultDeps = (): HandlerDeps => ({
   extract: (text, ctx) => extractDeadlines(text, ctx, llmFromEnv()),
   post: (path, body) => postBackend(path, body),
   get: (path) => getBackend(path),
+  classify: (email, ctx) => classifyEmail(email, ctx, { ...llmFromEnv(), timeoutMs: 30_000 }),
   word: async (draft) => {
     const llm = llmFromEnv();
     const p = wordingPrompt(draft);
@@ -131,6 +141,10 @@ export async function handleMessage(msg: AgentMessage, ctx: HandlerContext): Pro
     }
     case 'intake.parse': {
       reply = await handleIntake(msg, requestId, woke, ctx);
+      break;
+    }
+    case 'inbox.message': {
+      reply = await handleInbox(msg, requestId, woke, ctx);
       break;
     }
     default: {
@@ -240,6 +254,183 @@ async function handleIntake(
   return `Found ${out.assignments.length} deadlines in ${fileName}.`;
 }
 
+/** "Prof. Lee <lee@uni.test>" -> "Prof. Lee". Display only. */
+export function senderName(from: string): string {
+  const m = /^\s*"?([^"<]+?)"?\s*<[^>]+>\s*$/.exec(from);
+  return (m?.[1] ?? from).trim().slice(0, 80) || 'unknown sender';
+}
+
+const whenIn = (iso: string, tz: string) =>
+  new Intl.DateTimeFormat('en-CA', {
+    timeZone: tz,
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  }).format(new Date(iso));
+
+/**
+ * PRD M6: read one email as data, describe it with the LLM, and let the backend's rule decide
+ * whether it applies. A confident deadline move that applied triggers a replan (a new brief).
+ */
+async function handleInbox(
+  msg: Extract<AgentMessage, { type: 'inbox.message' }>,
+  requestId: string,
+  woke: ReturnType<Emitter['event']>,
+  ctx: HandlerContext,
+): Promise<string> {
+  const deps = { ...defaultDeps(), ...ctx.deps };
+  const { inboxMessageId, from, subject, receivedAt, body } = msg.payload;
+  const sender = senderName(from);
+  const fail = async (reason: string, detail?: string) => {
+    await ctx.emitter.emit(
+      woke,
+      ctx.emitter.event({
+        eventId: `${requestId}:error`,
+        requestId,
+        type: 'agent.error',
+        reason,
+        payload: {
+          inboxMessageId,
+          stage: 'inbox',
+          ...(detail ? { detail: detail.slice(0, 500) } : {}),
+        },
+      }),
+    );
+    return reason;
+  };
+
+  const started = Date.now();
+  let state: AgentState;
+  try {
+    const res = await deps.get('/api/agent/state');
+    if (!res.ok)
+      return fail(`Couldn't check the email from ${sender}.`, `state HTTP ${res.status}`);
+    state = AgentState.parse(await res.json());
+  } catch (err) {
+    return fail(`Couldn't check the email from ${sender}.`, String(err));
+  }
+
+  let out: ClassifyOutput;
+  try {
+    out = await deps.classify(
+      { from, subject, receivedAt, body },
+      { timezone: state.timezone, assignments: state.assignments },
+    );
+  } catch (err) {
+    if (err instanceof LlmError)
+      return fail(
+        `Couldn't read the email from ${sender}: the AI service is busy. It will be retried.`,
+        err.message,
+      );
+    return fail(`Couldn't read the email from ${sender}.`, String(err));
+  }
+  const { change } = out;
+
+  const result: InboxResultRequest = {
+    studentId: state.studentId,
+    requestId,
+    inboxMessageId,
+    model: out.model,
+    change,
+  };
+  let decision: InboxResultResponse;
+  try {
+    const res = await deps.post('/api/agent/inbox/result', result);
+    if (!res.ok)
+      return fail(
+        `Read the email from ${sender} but the app rejected the result.`,
+        `HTTP ${res.status} ${await res.text()}`,
+      );
+    decision = InboxResultResponse.parse(await res.json());
+  } catch (err) {
+    return fail(`Read the email from ${sender} but couldn't save the result.`, String(err));
+  }
+
+  const ms = Date.now() - started;
+  const events = [
+    ctx.emitter.event({
+      eventId: `${requestId}:classified`,
+      requestId,
+      type: 'inbox.classified',
+      reason:
+        `Read an email from ${sender}: ${change.summary}` +
+        (change.injectionSuspected
+          ? ' It contained instructions aimed at an AI; Helm treated them as data and took no action from them.'
+          : ''),
+      payload: {
+        inboxMessageId,
+        from: sender,
+        kind: change.kind,
+        confidence: change.confidence,
+        matchConfidence: change.matchConfidence,
+        injectionSuspected: change.injectionSuspected,
+        injectionSignals: change.injectionSignals,
+        decision: decision.decision,
+        model: out.model,
+        ms,
+      },
+    }),
+  ];
+  const title = decision.assignmentTitle ?? change.title ?? 'an assignment';
+  if (decision.decision === 'applied') {
+    const what =
+      change.kind === 'deadline_changed' && change.newDueAt
+        ? `now due ${whenIn(change.newDueAt, state.timezone)}`
+        : 'requirements updated';
+    events.push(
+      ctx.emitter.event({
+        eventId: `${requestId}:applied`,
+        requestId,
+        type: 'change.applied',
+        reason: `Updated "${title}": ${what}, from ${sender}'s email`,
+        payload: { inboxMessageId, changeId: decision.changeId, kind: change.kind, from: sender },
+      }),
+    );
+  } else if (decision.decision === 'needs_confirmation' || decision.decision === 'review') {
+    events.push(
+      ctx.emitter.event({
+        eventId: `${requestId}:detected`,
+        requestId,
+        type: 'change.detected',
+        reason:
+          decision.decision === 'review'
+            ? `New deadline from ${sender}'s email to check: "${title}"`
+            : `Needs your OK: ${change.summary} ${decision.reason}`,
+        payload: {
+          inboxMessageId,
+          changeId: decision.changeId,
+          kind: change.kind,
+          decision: decision.decision,
+          from: sender,
+        },
+      }),
+    );
+  }
+  await ctx.emitter.emit(woke, ...events);
+
+  if (
+    decision.decision === 'applied' &&
+    change.kind === 'deadline_changed' &&
+    !decision.duplicate
+  ) {
+    await handleBrief(
+      {
+        v: 1,
+        type: 'brief.generate',
+        requestId: `${requestId}:replan`,
+        studentId: state.studentId,
+        payload: { trigger: 'change' },
+      },
+      `${requestId}:replan`,
+      woke,
+      ctx,
+    );
+  }
+  return `${change.kind}: ${decision.decision} (${decision.reason})`;
+}
+
 async function handleBrief(
   msg: Extract<AgentMessage, { type: 'brief.generate' }>,
   requestId: string,
@@ -290,10 +481,12 @@ async function handleBrief(
       requestId,
       type: 'brief.generated',
       reason:
-        `Wrote your ${trigger === 'cron' ? 'morning' : ''} brief: ${brief.focus.length} focus item${brief.focus.length === 1 ? '' : 's'}`.replace(
-          '  ',
-          ' ',
-        ),
+        trigger === 'change'
+          ? `Replanned your day after the change: ${brief.focus.length} focus item${brief.focus.length === 1 ? '' : 's'}`
+          : `Wrote your ${trigger === 'cron' ? 'morning' : ''} brief: ${brief.focus.length} focus item${brief.focus.length === 1 ? '' : 's'}`.replace(
+              '  ',
+              ' ',
+            ),
       payload: {
         trigger,
         forDate: brief.forDate,

@@ -19,6 +19,9 @@ const ICON: Record<string, string> = {
   'intake.parsed': '📄',
   'brief.generated': '✎',
   'brief.failed': '⚠︎',
+  'inbox.classified': '✉︎',
+  'change.detected': '?',
+  'change.applied': '↻',
   'egress.blocked': '⛔︎',
   'egress.allowed': '✓',
   'sandbox.created': '▢',
@@ -82,7 +85,8 @@ export function Timeline() {
                   className={
                     e.type.endsWith('error') ||
                     e.type.endsWith('failed') ||
-                    e.type === 'egress.blocked'
+                    e.type === 'egress.blocked' ||
+                    e.payload.injectionSuspected === true
                       ? 'font-medium text-flare'
                       : 'font-medium'
                   }

@@ -1,9 +1,10 @@
-import { and, desc, eq, gt } from 'drizzle-orm';
+import { and, desc, eq, sql } from 'drizzle-orm';
 import { BriefContent, utcToLocal, type AgentState } from '@helm/shared';
 import type { Db } from '@/db';
 import { schema } from '@/db';
 import type { User } from '@/db/schema';
 import { formatWhen } from './format';
+import { describeChange } from './inbox';
 
 /** What the agent needs for a brief: open, confirmed assignments and recent changes. */
 export async function agentState(db: Db, user: User): Promise<AgentState> {
@@ -27,7 +28,8 @@ export async function agentState(db: Db, user: User): Promise<AgentState> {
       and(
         eq(schema.assignments.userId, user.id),
         eq(schema.assignmentChanges.applied, true),
-        gt(schema.assignmentChanges.createdAt, since),
+        // A change the student confirmed later counts from when it was applied.
+        sql`coalesce(${schema.assignmentChanges.decidedAt}, ${schema.assignmentChanges.createdAt}) > ${since}`,
       ),
     )
     .orderBy(desc(schema.assignmentChanges.createdAt))
@@ -49,14 +51,17 @@ export async function agentState(db: Db, user: User): Promise<AgentState> {
         progressPct: r.a.progressPct,
         status: r.a.status,
       })),
-    changes: changes.map((r) => ({
-      title: r.title,
-      field: r.c.field,
-      oldValue: r.c.oldValue,
-      newValue: r.c.newValue,
-      source: r.c.source,
-      at: r.c.createdAt.toISOString(),
-    })),
+    changes: changes.map((r) => {
+      const d = describeChange(r.c, user.timezone);
+      return {
+        title: r.title,
+        field: d.label,
+        oldValue: d.from,
+        newValue: d.to,
+        source: r.c.source,
+        at: (r.c.decidedAt ?? r.c.createdAt).toISOString(),
+      };
+    }),
   };
 }
 

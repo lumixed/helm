@@ -1,6 +1,12 @@
 import { z } from 'zod';
 
-export const ASSIGNMENT_STATUSES = ['todo', 'in_progress', 'done', 'submitted'] as const;
+export const ASSIGNMENT_STATUSES = [
+  'todo',
+  'in_progress',
+  'done',
+  'submitted',
+  'cancelled',
+] as const;
 export const AssignmentStatus = z.enum(ASSIGNMENT_STATUSES);
 export type AssignmentStatus = z.infer<typeof AssignmentStatus>;
 

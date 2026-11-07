@@ -52,7 +52,12 @@ export function BriefCard({
         <h2 className="text-lg font-semibold">Your brief</h2>
         {brief && (
           <p className="text-sm text-sea-800/80 dark:text-sea-100/80">
-            {brief.trigger === 'cron' ? 'Morning brief' : 'On request'} · {brief.generatedLabel}
+            {brief.trigger === 'cron'
+              ? 'Morning brief'
+              : brief.trigger === 'change'
+                ? 'Replanned after a change'
+                : 'On request'}{' '}
+            · {brief.generatedLabel}
           </p>
         )}
       </div>

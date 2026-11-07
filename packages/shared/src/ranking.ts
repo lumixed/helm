@@ -24,7 +24,7 @@ export interface RankInput {
   weightPct?: number | null;
   estMinutes?: number | null;
   progressPct?: number | null;
-  status: 'todo' | 'in_progress' | 'done' | 'submitted';
+  status: 'todo' | 'in_progress' | 'done' | 'submitted' | 'cancelled';
 }
 
 export interface Ranked<T extends RankInput = RankInput> {

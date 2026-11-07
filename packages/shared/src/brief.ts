@@ -57,7 +57,7 @@ export const BriefContent = z.object({
   changes: AgentState.shape.changes,
   /** "About 4h planned" style line. */
   capacity: z.string().max(200),
-  trigger: z.enum(['cron', 'manual', 'onboarding']),
+  trigger: z.enum(['cron', 'manual', 'onboarding', 'change']),
   /** Which model wrote the summary, or "template". */
   writer: z.string().max(100),
 });

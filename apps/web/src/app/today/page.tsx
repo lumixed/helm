@@ -4,6 +4,10 @@ import { redirect } from 'next/navigation';
 import { formatDuration, rankAssignments } from '@helm/shared';
 import { AgentStatus } from '@/components/AgentStatus';
 import { BriefCard } from '@/components/BriefCard';
+import { ChangesCard } from '@/components/ChangesCard';
+import { SimulateEmail } from '@/components/SimulateEmail';
+import { demoEmailTemplates } from '@/lib/demo-emails';
+import { listChanges } from '@/lib/inbox';
 import { todaysBrief } from '@/lib/briefs';
 import { currentUser } from '@/lib/session';
 import { Card, Shell } from '@/components/ui';
@@ -18,11 +22,16 @@ export default async function TodayPage() {
   if (!user.onboarded) redirect('/setup');
   const db = await getDb();
   const fullUser = (await currentUser())!;
-  const [confirmed, pending, brief] = await Promise.all([
+  const [confirmed, pending, brief, changes] = await Promise.all([
     listAssignments(db, user.id, user.timezone, { review: false }),
     listAssignments(db, user.id, user.timezone, { review: true }),
     todaysBrief(db, fullUser),
+    listChanges(db, fullUser),
   ]);
+  const demo = process.env.DEMO_MODE === 'true';
+  const pickable = confirmed
+    .filter((a) => a.status === 'todo' || a.status === 'in_progress')
+    .map((a) => ({ id: a.id, label: `${a.courseCode ? `${a.courseCode} · ` : ''}${a.title}` }));
   const now = new Date();
   const ranked = rankAssignments(confirmed, now);
   const focus = ranked.slice(0, 3);
@@ -56,6 +65,8 @@ export default async function TodayPage() {
           {pending.length} new deadline{pending.length === 1 ? '' : 's'} to check →
         </Link>
       )}
+
+      <ChangesCard pending={changes.pending} applied={changes.applied} assignments={pickable} />
 
       <BriefCard initial={brief} briefTime={user.briefTimeLocal} />
 
@@ -117,6 +128,7 @@ export default async function TodayPage() {
           Add another syllabus
         </Link>
       </p>
+      {demo && <SimulateEmail templates={demoEmailTemplates(confirmed, user.timezone, now)} />}
       <AgentStatus initial={agent} />
     </Shell>
   );

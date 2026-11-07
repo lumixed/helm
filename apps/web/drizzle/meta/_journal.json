@@ -43,6 +43,13 @@
       "when": 1794091578431,
       "tag": "0005_agent_network_hash",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1794093386023,
+      "tag": "0006_inbox_changes",
+      "breakpoints": true
     }
   ]
 }

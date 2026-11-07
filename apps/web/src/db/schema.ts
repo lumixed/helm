@@ -153,20 +153,36 @@ export const assignments = pgTable(
   (t) => [index('assignments_user_due_idx').on(t.userId, t.dueAt)],
 );
 
-export const assignmentChanges = pgTable('assignment_changes', {
-  id: id(),
-  assignmentId: uuid('assignment_id')
-    .notNull()
-    .references(() => assignments.id, { onDelete: 'cascade' }),
-  field: text('field').notNull(),
-  oldValue: text('old_value'),
-  newValue: text('new_value'),
-  source: text('source').notNull(),
-  evidence: text('evidence'),
-  confidence: real('confidence'),
-  applied: boolean('applied').notNull().default(false),
-  createdAt: createdAt(),
-});
+export const assignmentChanges = pgTable(
+  'assignment_changes',
+  {
+    id: id(),
+    /** Null while a pending change waits for the student to say which assignment it means. */
+    assignmentId: uuid('assignment_id').references(() => assignments.id, { onDelete: 'cascade' }),
+    /** Null only on rows written before M6. */
+    userId: uuid('user_id').references(() => users.id, { onDelete: 'cascade' }),
+    /** The email this came from (provenance), if any. */
+    inboxMessageId: uuid('inbox_message_id').references(() => inboxMessages.id, {
+      onDelete: 'set null',
+    }),
+    /** ChangeKind: deadline_changed, cancelled, requirement_changed. */
+    kind: text('kind'),
+    field: text('field').notNull(),
+    oldValue: text('old_value'),
+    newValue: text('new_value'),
+    source: text('source').notNull(),
+    evidence: text('evidence'),
+    confidence: real('confidence'),
+    applied: boolean('applied').notNull().default(false),
+    /** applied | pending (waits for the student) | dismissed. */
+    status: text('status').notNull().default('applied'),
+    /** Why it applied or why it waits, in plain words. */
+    reason: text('reason'),
+    decidedAt: timestamp('decided_at', { withTimezone: true }),
+    createdAt: createdAt(),
+  },
+  (t) => [index('assignment_changes_user_status_idx').on(t.userId, t.status)],
+);
 
 export const inboxMessages = pgTable(
   'inbox_messages',
@@ -179,7 +195,17 @@ export const inboxMessages = pgTable(
     /** The email body itself is not stored; it goes to the agent. */
     bodyHash: text('body_hash').notNull(),
     classification: text('classification'),
+    /** received -> sent (to the agent) -> processed | failed. */
     status: text('status').notNull().default('received'),
+    requestId: text('request_id'),
+    /** The agent's structured reading (EmailChange): no body text, only fields and a short quote. */
+    resultJson: jsonb('result_json').$type<Record<string, unknown>>(),
+    summary: text('summary'),
+    model: text('model'),
+    decision: text('decision'),
+    decisionReason: text('decision_reason'),
+    injectionSuspected: boolean('injection_suspected').notNull().default(false),
+    processedAt: timestamp('processed_at', { withTimezone: true }),
     createdAt: createdAt(),
   },
   (t) => [uniqueIndex('inbox_user_body_uq').on(t.userId, t.bodyHash)],
@@ -285,6 +311,8 @@ export type User = typeof users.$inferSelect;
 export type AgentRow = typeof agents.$inferSelect;
 export type Assignment = typeof assignments.$inferSelect;
 export type Course = typeof courses.$inferSelect;
+export type InboxMessage = typeof inboxMessages.$inferSelect;
+export type AssignmentChange = typeof assignmentChanges.$inferSelect;
 
 /** Maritime lifecycle webhooks (agent.woken, agent.sleeping, ...) and our own markers (PRD v2 WP-1). */
 export const maritimeEvents = pgTable(

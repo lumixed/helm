@@ -36,9 +36,11 @@ export const PingMessage = z.object({
 export const BriefGenerateMessage = z.object({
   ...base,
   type: z.literal('brief.generate'),
-  payload: z.object({ trigger: z.enum(['cron', 'manual', 'onboarding']).default('cron') }).default({
-    trigger: 'cron',
-  }),
+  payload: z
+    .object({ trigger: z.enum(['cron', 'manual', 'onboarding', 'change']).default('cron') })
+    .default({
+      trigger: 'cron',
+    }),
 });
 
 export const HeartbeatMessage = z.object({

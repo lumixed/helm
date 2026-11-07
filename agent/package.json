@@ -9,7 +9,8 @@
     "build": "node scripts/bundle.mjs",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "eval": "tsx scripts/eval-extraction.ts"
+    "eval": "tsx scripts/eval-extraction.ts",
+    "eval:inbox": "tsx scripts/eval-inbox.ts"
   },
   "dependencies": {
     "@helm/shared": "workspace:*",
