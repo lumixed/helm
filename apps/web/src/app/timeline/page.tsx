@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { RedteamButton } from '@/components/RedteamButton';
 import { Timeline } from '@/components/Timeline';
 import { Shell } from '@/components/ui';
 import { requireProfile } from '@/lib/page-data';
@@ -20,6 +21,7 @@ export default async function TimelinePage() {
       }
     >
       <p>Everything your private agent did, when, and why.</p>
+      {process.env.DEMO_MODE === 'true' && <RedteamButton />}
       <Timeline />
     </Shell>
   );

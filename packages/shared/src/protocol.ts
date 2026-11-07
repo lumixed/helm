@@ -15,6 +15,7 @@ export const AGENT_MESSAGE_TYPES = [
   'inbox.message',
   'submission.hold_notice',
   'submission.run',
+  'redteam.egress',
 ] as const;
 
 export const AgentMessageType = z.enum(AGENT_MESSAGE_TYPES);
@@ -84,7 +85,18 @@ export const SubmissionRunMessage = z.object({
   payload: z.object({ submissionId: z.string().min(1), attempt: z.number().int().min(1) }),
 });
 
+/**
+ * DEMO ONLY, clearly labelled a simulation (PRD v2 WP-5): the agent deliberately tries to send a
+ * harmless request to a host that is NOT on its allowlist, to show the network policy blocking it.
+ */
+export const RedteamEgressMessage = z.object({
+  ...base,
+  type: z.literal('redteam.egress'),
+  payload: z.object({ url: z.url().refine((u) => u.startsWith('https://'), 'https only') }),
+});
+
 export const AgentMessage = z.discriminatedUnion('type', [
+  RedteamEgressMessage,
   PingMessage,
   BriefGenerateMessage,
   HeartbeatMessage,

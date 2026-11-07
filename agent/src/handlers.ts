@@ -71,6 +71,7 @@ const WAKE_REASONS: Record<AgentMessage['type'], string> = {
   'inbox.message': 'Woke for a new email',
   'submission.hold_notice': 'Woke to send a last-chance hold notice',
   'submission.run': 'Woke to submit homework',
+  'redteam.egress': 'Woke for a red-team simulation',
 };
 
 /**
@@ -117,6 +118,10 @@ export async function handleMessage(msg: AgentMessage, ctx: HandlerContext): Pro
     }
     case 'brief.generate': {
       reply = await handleBrief(msg, requestId, woke, ctx);
+      break;
+    }
+    case 'redteam.egress': {
+      reply = await handleRedteam(msg, requestId, woke, ctx);
       break;
     }
     case 'heartbeat': {
@@ -299,4 +304,53 @@ async function handleBrief(
     }),
   );
   return `Brief for ${brief.forDate}: ${brief.focus.map((f) => f.title).join('; ') || 'nothing urgent'}`;
+}
+
+/**
+ * Simulated compromise (demo only): try to send a harmless payload to a host outside the
+ * allowlist and report honestly what happened. Nothing real is sent; the body says so.
+ */
+async function handleRedteam(
+  msg: Extract<AgentMessage, { type: 'redteam.egress' }>,
+  requestId: string,
+  woke: ReturnType<Emitter['event']>,
+  ctx: HandlerContext,
+): Promise<string> {
+  if (!runtime().demoMode) return 'Red-team simulation is only available in demo mode.';
+  const url = new URL(msg.payload.url);
+  const started = Date.now();
+  let outcome: { blocked: boolean; detail: string };
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'content-type': 'text/plain' },
+      body: 'Helm red-team SIMULATION. No student data.',
+      signal: AbortSignal.timeout(6000),
+    });
+    outcome = { blocked: false, detail: `HTTP ${res.status}` };
+  } catch (err) {
+    const cause = (err as { cause?: { code?: string; message?: string } }).cause;
+    outcome = {
+      blocked: true,
+      detail: (cause?.code ?? cause?.message ?? String(err)).slice(0, 200),
+    };
+  }
+  await ctx.emitter.emit(
+    woke,
+    ctx.emitter.event({
+      eventId: `${requestId}:egress`,
+      requestId,
+      type: outcome.blocked ? 'egress.blocked' : 'egress.allowed',
+      reason: outcome.blocked
+        ? `Blocked: the agent tried to reach ${url.host} (red-team simulation)`
+        : `NOT blocked: the agent reached ${url.host} (red-team simulation). The allowlist is off.`,
+      payload: {
+        host: url.host,
+        simulation: true,
+        detail: outcome.detail,
+        ms: Date.now() - started,
+      },
+    }),
+  );
+  return outcome.blocked ? `blocked: ${url.host}` : `reached: ${url.host}`;
 }

@@ -87,6 +87,8 @@ export const agents = pgTable(
     configWrittenAt: timestamp('config_written_at', { withTimezone: true }),
     /** Hash of the settings file last written, so changes (e.g. a new app URL) are re-sent. */
     configHash: text('config_hash'),
+    /** Hash of the egress allowlist last applied at Maritime (PRD v2 WP-5). */
+    networkHash: text('network_hash'),
     createdAt: createdAt(),
     lastSeenAt: timestamp('last_seen_at', { withTimezone: true }),
   },

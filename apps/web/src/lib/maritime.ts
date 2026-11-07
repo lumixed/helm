@@ -23,6 +23,16 @@ export interface MaritimeAgent {
   imageName?: string | null;
 }
 
+export interface AgentNetwork {
+  internet: {
+    mode: 'all' | 'list' | 'none';
+    presetId: string | null;
+    allow: string[];
+    deny: string[];
+  };
+  enforcement?: string;
+}
+
 export interface EnvSeed {
   key: string;
   value: string;
@@ -62,6 +72,22 @@ export interface MaritimeClient {
   invokeWebhook(agentId: string, token: string, body: string): Promise<void>;
   setPolicy(externalId: string, policy: Record<string, number>): Promise<void>;
   deleteEndUser(externalId: string): Promise<void>;
+  getNetwork(agentId: string): Promise<AgentNetwork>;
+  putNetwork(
+    agentId: string,
+    body: {
+      internet: {
+        mode: 'all' | 'list' | 'none';
+        allow: string[];
+        deny: string[];
+        presetId?: string | null;
+      };
+    },
+  ): Promise<AgentNetwork>;
+  testNetwork(
+    agentId: string,
+    destination: string,
+  ): Promise<{ destination: string; reached: boolean; durationMs?: number; reason: string | null }>;
   listWebhooks(): Promise<{ id: string; url: string; isActive?: boolean }[]>;
   createWebhook(url: string, events?: string[]): Promise<{ id: string; secret: string }>;
   deleteWebhook(id: string): Promise<void>;
@@ -173,6 +199,25 @@ export function createMaritimeClient(opts: {
     },
     async setPolicy(externalId, policy) {
       await call('PUT', `/api/v1/end-users/${enc(externalId)}/policy`, { policy });
+    },
+    async getNetwork(agentId) {
+      return (await call<AgentNetwork>('GET', `/api/v1/network/workloads/agent/${enc(agentId)}`))
+        .data;
+    },
+    async putNetwork(agentId, body) {
+      return (
+        await call<AgentNetwork>('PUT', `/api/v1/network/workloads/agent/${enc(agentId)}`, body)
+      ).data;
+    },
+    async testNetwork(agentId, destination) {
+      return (
+        await call<{
+          destination: string;
+          reached: boolean;
+          durationMs?: number;
+          reason: string | null;
+        }>('POST', `/api/v1/network/workloads/agent/${enc(agentId)}/test`, { destination })
+      ).data;
     },
     async listWebhooks() {
       const { data } = await call<unknown>('GET', '/api/v1/webhooks');

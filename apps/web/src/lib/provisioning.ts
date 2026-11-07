@@ -10,6 +10,7 @@ import type { Db } from '@/db';
 import { schema } from '@/db';
 import type { AgentRow, User } from '@/db/schema';
 import { generateAgentToken } from './agent-auth';
+import { ensureEgressPolicy } from './network';
 import {
   MaritimeError,
   type EnvSeed,
@@ -173,6 +174,11 @@ export async function refreshAgent(
     await setAgent(db, row.id, { status: lastError ? 'error' : status, lastError });
     if (!lastError && (status === 'ready' || status === 'asleep') && settingsStale(row, user)) {
       await writeAgentSettings(db, user, maritime);
+    }
+    if (!lastError) {
+      await ensureEgressPolicy(db, row, maritime).catch((err: unknown) =>
+        console.warn('[network] allowlist not applied yet', String(err)),
+      );
     }
   } catch (err) {
     if (err instanceof MaritimeError && err.status === 404) {

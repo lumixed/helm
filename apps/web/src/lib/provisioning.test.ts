@@ -26,6 +26,7 @@ function fakeMaritime() {
       { id: string; externalId: string; status: MaritimeAgentStatus; input: CreateAgentInput }
     >(),
     files: new Map<string, string>(),
+    network: new Map<string, string[]>(),
     creates: 0,
   };
   const client: MaritimeClient = {
@@ -81,6 +82,16 @@ function fakeMaritime() {
       const a = state.agents.get(id);
       if (!a) throw new MaritimeError(404, 'not found', `/api/agents/${id}`);
       return { id, name: a.externalId, status: a.status, externalId: a.externalId };
+    },
+    async getNetwork() {
+      return { internet: { mode: 'all' as const, presetId: null, allow: [], deny: [] } };
+    },
+    async putNetwork(id, body) {
+      state.network.set(id, body.internet.allow);
+      return { internet: { ...body.internet, presetId: null } };
+    },
+    async testNetwork(_id, destination) {
+      return { destination, reached: false, reason: 'Refused by the internet policy.' };
     },
     async listWebhooks() {
       return [];
@@ -222,6 +233,21 @@ describe('refreshAgent', () => {
     await refreshAgent(db, user, client);
     expect(writes).toBe(1);
     expect(read().backendUrl).toBe('https://helm.test');
+    delete process.env.APP_BASE_URL;
+  });
+});
+
+describe('egress allowlist', () => {
+  it('is applied once the agent is up, and only once', async () => {
+    const { client, state } = fakeMaritime();
+    process.env.APP_BASE_URL = 'https://helm.test';
+    await ensureStudentAgent(db, user, client, env);
+    state.agents.get('mt_1')!.status = 'active';
+    await refreshAgent(db, user, client);
+    expect(state.network.get('mt_1')).toEqual(['generativelanguage.googleapis.com', 'helm.test']);
+    state.network.clear();
+    await refreshAgent(db, user, client);
+    expect(state.network.size).toBe(0);
     delete process.env.APP_BASE_URL;
   });
 });

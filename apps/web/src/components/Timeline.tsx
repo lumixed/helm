@@ -30,6 +30,7 @@ const ICON: Record<string, string> = {
   'maritime:agent.error': '⚠︎',
   'maritime:agent.llm_limit_reached': '⏸︎',
   'maritime:end_user.created': '+',
+  'maritime:helm.network_test': '⛨',
 };
 
 const SOURCE: Record<string, string> = {
