@@ -27,6 +27,8 @@ function fakeMaritime() {
     >(),
     files: new Map<string, string>(),
     network: new Map<string, string[]>(),
+    env: new Map<string, { value: string; secret: boolean }>(),
+    reloads: 0,
     creates: 0,
   };
   const client: MaritimeClient = {
@@ -89,6 +91,12 @@ function fakeMaritime() {
     async putNetwork(id, body) {
       state.network.set(id, body.internet.allow);
       return { internet: { ...body.internet, presetId: null } };
+    },
+    async setEnv(id, key, value, secret) {
+      state.env.set(`${id}:${key}`, { value, secret });
+    },
+    async reloadEnv() {
+      state.reloads++;
     },
     async testNetwork(_id, destination) {
       return { destination, reached: false, reason: 'Refused by the internet policy.' };
@@ -262,5 +270,37 @@ describe('deleteStudent', () => {
       0,
     );
     expect(await db.select().from(schema.agents)).toHaveLength(0);
+  });
+});
+
+describe('demo-portal login (WP-0.5)', () => {
+  it('goes in as encrypted env at creation', async () => {
+    process.env.APP_BASE_URL = 'https://helm.test';
+    process.env.AUTH_SECRET ??= 'test-secret-test-secret-123';
+    const { client, state } = fakeMaritime();
+    const row = await ensureStudentAgent(db, user, client, env);
+    const byKey = Object.fromEntries(
+      state.agents.get('mt_1')!.input.initialEnvVars!.map((e) => [e.key, e]),
+    );
+    expect(byKey.PORTAL_URL?.value).toBe('https://helm.test/mock-portal');
+    expect(byKey.PORTAL_USERNAME).toMatchObject({ value: user.id, isSecret: true });
+    expect(byKey.PORTAL_PASSWORD?.isSecret).toBe(true);
+    expect(row.portalEnvAt).not.toBeNull();
+    delete process.env.APP_BASE_URL;
+  });
+
+  it('is added once to agents created before M7', async () => {
+    process.env.APP_BASE_URL = 'https://helm.test';
+    process.env.AUTH_SECRET ??= 'test-secret-test-secret-123';
+    const { client, state } = fakeMaritime();
+    await ensureStudentAgent(db, user, client, env);
+    await db.update(schema.agents).set({ portalEnvAt: null });
+    state.agents.get('mt_1')!.status = 'active';
+    await refreshAgent(db, user, client);
+    expect(state.env.get('mt_1:PORTAL_PASSWORD')?.secret).toBe(true);
+    expect(state.reloads).toBe(1);
+    await refreshAgent(db, user, client);
+    expect(state.reloads).toBe(1);
+    delete process.env.APP_BASE_URL;
   });
 });

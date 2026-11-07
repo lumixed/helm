@@ -11,6 +11,7 @@ import { schema } from '@/db';
 import type { AgentRow, User } from '@/db/schema';
 import { generateAgentToken } from './agent-auth';
 import { ensureEgressPolicy } from './network';
+import { portalBaseUrl, portalCredentials } from './portal';
 import {
   MaritimeError,
   type EnvSeed,
@@ -144,6 +145,8 @@ export async function ensureStudentAgent(
     await setAgent(db, row.id, {
       maritimeAgentId: agent.id,
       status: STATUS_MAP[agent.status] ?? 'provisioning',
+      // The portal login went in with the initial env.
+      portalEnvAt: portalEnv(user.id).length ? new Date() : null,
     });
     // Bounded cost and wakes per student (PRD S8). Needs no special scope; failure is non-fatal.
     await maritime
@@ -178,6 +181,9 @@ export async function refreshAgent(
     if (!lastError) {
       await ensureEgressPolicy(db, row, maritime).catch((err: unknown) =>
         console.warn('[network] allowlist not applied yet', String(err)),
+      );
+      await ensurePortalEnv(db, row, maritime).catch((err: unknown) =>
+        console.warn('[portal] login not set on agent yet', String(err)),
       );
     }
   } catch (err) {
@@ -253,7 +259,38 @@ export function agentEnv(user: User, token: string, env: ProvisionEnv) {
     seeds.push({ key: AGENT_ENV.geminiKey, value: env.geminiApiKey, isSecret: true });
   if (env.geminiModel)
     seeds.push({ key: AGENT_ENV.geminiModel, value: env.geminiModel, isSecret: false });
+  seeds.push(...portalEnv(user.id));
   return seeds;
+}
+
+/** The student's own demo-portal login, only ever stored as encrypted env on their agent. */
+export function portalEnv(userId: string): EnvSeed[] {
+  const portal = portalBaseUrl();
+  if (!portal) return [];
+  let c: ReturnType<typeof portalCredentials>;
+  try {
+    c = portalCredentials(userId);
+  } catch (err) {
+    // No AUTH_SECRET: the agent is still useful without a portal login. Never block provisioning.
+    console.warn('[portal] no portal login for this agent', String(err));
+    return [];
+  }
+  return [
+    { key: AGENT_ENV.portalUrl, value: portal, isSecret: false },
+    { key: AGENT_ENV.portalUsername, value: c.username, isSecret: true },
+    { key: AGENT_ENV.portalPassword, value: c.password, isSecret: true },
+  ];
+}
+
+/** Agents created before M7 get their portal login through the env API, once. */
+export async function ensurePortalEnv(db: Db, row: AgentRow, maritime: MaritimeClient) {
+  if (row.portalEnvAt || !row.maritimeAgentId || row.maritimeAgentId === 'local') return false;
+  const seeds = portalEnv(row.userId);
+  if (seeds.length === 0) return false;
+  for (const s of seeds) await maritime.setEnv(row.maritimeAgentId, s.key, s.value, s.isSecret);
+  await maritime.reloadEnv(row.maritimeAgentId);
+  await setAgent(db, row.id, { portalEnvAt: new Date() });
+  return true;
 }
 
 async function getAgentRow(db: Db, userId: string): Promise<AgentRow | null> {

@@ -131,11 +131,25 @@ Create response JSON shape: `.results.data.id` (CLI wraps responses in `{meta, r
 
 Agent releases: `helm-image-v0-3` (`…da6496698c9d`), `helm-image-v0-4` (`…11a7f1af985a`). Test agents `helm-g1`, `user_spike1`, `user_spike2` are **stopped** so their heartbeats don't use the 5-awake limit (`maritime start <name>` to bring one back).
 
+## Encrypted env on existing agents (verified 2026-11-07)
+
+The key added on 2026-11-07 can write env (the earlier key could not). `POST /api/agents/{id}/env` with `{key, value, isSecret}` upserts one variable (201), `DELETE /api/agents/{id}/env/{key}` removes it (204), and `POST /api/agents/{id}/reload-env` hot-reloads saved env into the running VM (falls back to a restart). Shapes taken from `maritime-sdk` 0.11 `setEnv` / `deleteEnv` / `reloadEnv`; set and remove were tested on the stopped test agent `helm-g1`. The CLI's `--dry-run` can't resolve agents, so it doesn't show these requests.
+
+Helm uses this to give agents created before M7 their demo-portal login (`PORTAL_URL`, and `PORTAL_USERNAME` / `PORTAL_PASSWORD` as secrets) once, on the next status refresh (`agents.portal_env_at`). New agents get it in `initialEnvVars`.
+
+## Releases
+
+`helm-image-v0-5`, `v0-6` (egress allowlist work), `v0-7` (M6 email change detection, image `…1d2045ae04af`, both student agents moved on 2026-11-07 16:34 PT, `/data` kept).
+
+## Submission scheduling (M7)
+
+Maritime documents no one-off timed triggers, so exact-time work is ours: `tick()` in `apps/web/src/lib/submissions.ts`, idempotent with conditional updates. It runs when (1) a student has the app open (the queue polls every 3 s, which gives the demo its ±seconds precision), (2) each agent's platform-cron heartbeat (`*/15 * * * *`) calls `POST /api/agent/heartbeat`, the safety net, well inside the default 2-hour lead, and (3) optionally an external pinger or Vercel Cron calls `/api/scheduler/tick` with `Bearer $CRON_SECRET`. Without (1) or (3), a hold notice or submission can be up to ~15 minutes late, never past the deadline: runs go without the full hold window once the deadline is within 30 minutes.
+
 ## Open items
 
 - [x] Start the Maritime free trial.
 - [x] Run `scripts/g1-spike.sh` (results above).
-- [ ] Get a full-access key (`manage` for deleting students). Then delete the spike end users `user_spike1` and `user_spike2`.
+- [ ] Get a full-access key (`manage` for deleting students). Then delete the spike end users `user_spike1` and `user_spike2`. (The 2026-11-07 key has the `secrets` scope; `manage` not yet tested.)
 - [ ] Confirm agent → backend events arrive once the backend is on a public URL (Vercel).
 - [ ] Measure wake-from-sleep latency (wait > 300 s idle, then chat).
 - [x] Custom image / upload key field for end-user agents (`imageName` / `uploadS3Key`, see above).

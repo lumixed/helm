@@ -2,8 +2,12 @@ import {
   AgentState,
   utcToLocal,
   type AgentMessage,
+  AgentSubmissionJob,
   InboxResultResponse,
+  blocking,
+  runSubmissionChecks,
   type BriefRequest,
+  type SubmissionResultRequest,
   type InboxResultRequest,
   type IntakeResultRequest,
 } from '@helm/shared';
@@ -20,6 +24,9 @@ import {
   type InboundEmail,
 } from './tools/classify-email';
 import { DocumentError, readDocumentText, resolveInside } from './tools/read-document';
+import { createHash } from 'node:crypto';
+import fs from 'node:fs/promises';
+import { httpDriver, portalCredsFromEnv, type SubmissionDriver } from './tools/portal-http';
 import type { Emitter } from './emit';
 import type { Dedupe } from './dedupe';
 
@@ -43,6 +50,9 @@ export interface HandlerDeps {
   word: WordFn;
   now: () => Date;
   dataDir: string;
+  /** The submission driver, or null when this agent has no portal login. */
+  driver: () => SubmissionDriver | null;
+  readFile: (absPath: string) => Promise<Uint8Array>;
 }
 
 const defaultDeps = (): HandlerDeps => ({
@@ -71,6 +81,11 @@ const defaultDeps = (): HandlerDeps => ({
   },
   now: () => new Date(),
   dataDir: DATA_DIR,
+  driver: () => {
+    const creds = portalCredsFromEnv();
+    return creds ? httpDriver(creds) : null;
+  },
+  readFile: async (p) => new Uint8Array(await fs.readFile(p)),
 });
 
 const WAKE_REASONS: Record<AgentMessage['type'], string> = {
@@ -135,8 +150,17 @@ export async function handleMessage(msg: AgentMessage, ctx: HandlerContext): Pro
       break;
     }
     case 'heartbeat': {
-      // Safety net for submissions (built with M7). Stays quiet so the timeline isn't flooded.
-      reply = 'ok';
+      reply = await handleHeartbeat(ctx);
+      // Stays off the timeline unless the safety net found something to do.
+      ctx.dedupe.add(requestId);
+      return reply;
+    }
+    case 'submission.hold_notice': {
+      reply = await handleHoldNotice(msg, requestId, woke, ctx);
+      break;
+    }
+    case 'submission.run': {
+      reply = await handleSubmissionRun(msg, requestId, woke, ctx);
       break;
     }
     case 'intake.parse': {
@@ -148,9 +172,9 @@ export async function handleMessage(msg: AgentMessage, ctx: HandlerContext): Pro
       break;
     }
     default: {
-      // Phase 0: the wake is recorded; real handlers land in later phases (PRD section 17).
+      // Every message type has a handler; this only catches a type added without one.
       await ctx.emitter.emit(woke);
-      reply = `Received ${msg.type}. Not implemented yet.`;
+      reply = `Received ${(msg as AgentMessage).type}. Not implemented yet.`;
     }
   }
 
@@ -546,4 +570,189 @@ async function handleRedteam(
     }),
   );
   return outcome.blocked ? `blocked: ${url.host}` : `reached: ${url.host}`;
+}
+
+/**
+ * Platform-cron heartbeat: the safety net (PRD 7). Asks the backend to act on anything due for
+ * this student, so a missed webhook can never miss a deadline.
+ */
+async function handleHeartbeat(ctx: HandlerContext): Promise<string> {
+  const deps = { ...defaultDeps(), ...ctx.deps };
+  try {
+    const res = await deps.post('/api/agent/heartbeat', {});
+    return res.ok ? `heartbeat: ${await res.text()}` : `heartbeat: HTTP ${res.status}`;
+  } catch (err) {
+    return `heartbeat failed: ${String(err).slice(0, 200)}`;
+  }
+}
+
+async function loadJob(deps: HandlerDeps, submissionId: string) {
+  const res = await deps.get(`/api/agent/submissions/${encodeURIComponent(submissionId)}`);
+  if (!res.ok) throw new Error(`job HTTP ${res.status}`);
+  return AgentSubmissionJob.parse(await res.json());
+}
+
+/** Read the approved file from this agent's own disk and re-run every check (PRD 12). */
+async function recheck(deps: HandlerDeps, job: AgentSubmissionJob) {
+  const path = resolveInside(deps.dataDir, job.agentFilePath);
+  if (!path) throw new DocumentError("The file is outside the agent's storage.");
+  let bytes: Uint8Array;
+  try {
+    bytes = await deps.readFile(path);
+  } catch {
+    throw new DocumentError("The file is missing from the agent's storage. Upload it again.");
+  }
+  const sha = createHash('sha256').update(bytes).digest('hex');
+  const checks = runSubmissionChecks({
+    fileName: job.fileName,
+    fileSize: bytes.length,
+    fileSha256: sha,
+    assignment: job.assignment,
+    consentSha256: job.consentSha256 ?? job.fileSha256,
+    now: deps.now(),
+  });
+  return { bytes, sha, checks };
+}
+
+async function handleHoldNotice(
+  msg: Extract<AgentMessage, { type: 'submission.hold_notice' }>,
+  requestId: string,
+  woke: ReturnType<Emitter['event']>,
+  ctx: HandlerContext,
+): Promise<string> {
+  const deps = { ...defaultDeps(), ...ctx.deps };
+  let reason: string;
+  let ok = false;
+  try {
+    const job = await loadJob(deps, msg.payload.submissionId);
+    const { checks } = await recheck(deps, job);
+    ok = !blocking(checks);
+    reason = ok
+      ? `Re-checked "${job.fileName}" before the hold window: ready to submit`
+      : `Re-checked "${job.fileName}": ${checks.find((c) => c.status === 'fail')!.message}`;
+  } catch (err) {
+    reason =
+      err instanceof DocumentError
+        ? err.message
+        : `Couldn't re-check the file (${String(err).slice(0, 120)})`;
+  }
+  await ctx.emitter.emit(
+    woke,
+    ctx.emitter.event({
+      eventId: `${requestId}:checks`,
+      requestId,
+      type: ok ? 'submission.checks_run' : 'agent.error',
+      reason,
+      payload: { submissionId: msg.payload.submissionId, stage: 'hold_notice' },
+    }),
+  );
+  return reason;
+}
+
+/**
+ * Submit one approved file (PRD 12, "Execution"): re-check it on this VM, log in to the portal
+ * with this student's own credentials, submit with the idempotency key, and report the receipt.
+ */
+async function handleSubmissionRun(
+  msg: Extract<AgentMessage, { type: 'submission.run' }>,
+  requestId: string,
+  woke: ReturnType<Emitter['event']>,
+  ctx: HandlerContext,
+): Promise<string> {
+  const deps = { ...defaultDeps(), ...ctx.deps };
+  const { submissionId, attempt } = msg.payload;
+  const started = Date.now();
+  const report = async (
+    outcome: SubmissionResultRequest['outcome'],
+    driver: 'http' | 'desktop',
+  ) => {
+    const body: SubmissionResultRequest = {
+      studentId: runtime().studentId,
+      requestId,
+      attempt,
+      driver,
+      outcome,
+    };
+    const res = await deps.post(
+      `/api/agent/submissions/${encodeURIComponent(submissionId)}/result`,
+      body,
+    );
+    if (!res.ok) throw new Error(`result HTTP ${res.status}`);
+  };
+  const failed = async (
+    error: string,
+    retryable: boolean,
+    title: string,
+    driver: 'http' | 'desktop' = 'http',
+  ) => {
+    try {
+      await report({ ok: false, error, retryable }, driver);
+    } catch (err) {
+      console.error('[submit] could not report failure', err);
+    }
+    await ctx.emitter.emit(
+      woke,
+      ctx.emitter.event({
+        eventId: `${requestId}:failed`,
+        requestId,
+        type: 'submission.failed',
+        reason: `Attempt ${attempt} for ${title} failed: ${error}`,
+        payload: { submissionId, attempt, retryable, ms: Date.now() - started },
+      }),
+    );
+    return error;
+  };
+
+  let job: AgentSubmissionJob;
+  try {
+    job = await loadJob(deps, submissionId);
+  } catch (err) {
+    return failed(
+      `Couldn't load the submission (${String(err).slice(0, 120)}).`,
+      true,
+      'a submission',
+    );
+  }
+  const title = `"${job.fileName}" (${job.assignment.courseCode ? `${job.assignment.courseCode} ` : ''}${job.assignment.title})`;
+  if (job.status !== 'submitting' || job.attempt !== attempt)
+    return `Skipped: attempt ${attempt} is no longer current (${job.status}).`;
+
+  let file: Awaited<ReturnType<typeof recheck>>;
+  try {
+    file = await recheck(deps, job);
+  } catch (err) {
+    return failed(err instanceof DocumentError ? err.message : String(err), false, title);
+  }
+  const bad = file.checks.find((c) => c.status === 'fail');
+  if (bad) return failed(bad.message, false, title);
+
+  const driver = deps.driver();
+  if (!driver) return failed('This agent has no portal login yet.', true, title);
+  const result = await driver.submit(job, { bytes: file.bytes, name: job.fileName });
+  if (!result.ok) return failed(result.error, result.retryable, title, driver.name);
+  try {
+    await report({ ok: true, receipt: result.receipt, duplicate: result.duplicate }, driver.name);
+  } catch (err) {
+    // The portal has it; the backend will learn on the next attempt (the portal returns the same
+    // receipt for the same key). Never resubmit a different copy.
+    console.error('[submit] receipt not reported', err);
+  }
+  await ctx.emitter.emit(
+    woke,
+    ctx.emitter.event({
+      eventId: `${requestId}:submitted`,
+      requestId,
+      type: 'submission.submitted',
+      reason: `Submitted ${title}: confirmation ${result.receipt.confirmationId}${result.duplicate ? ' (already on the portal)' : ''}`,
+      payload: {
+        submissionId,
+        attempt,
+        driver: driver.name,
+        confirmationId: result.receipt.confirmationId,
+        fileSha256: result.receipt.fileSha256,
+        ms: Date.now() - started,
+      },
+    }),
+  );
+  return `submitted ${result.receipt.confirmationId}`;
 }

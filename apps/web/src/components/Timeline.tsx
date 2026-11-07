@@ -22,6 +22,17 @@ const ICON: Record<string, string> = {
   'inbox.classified': '✉︎',
   'change.detected': '?',
   'change.applied': '↻',
+  'submission.scheduled': '⏲︎',
+  'submission.hold_notice_sent': '✋︎',
+  'submission.held': '⏸︎',
+  'submission.released': '▶︎',
+  'submission.cancelled': '✕',
+  'submission.checks_run': '☑︎',
+  'submission.submitted': '✓',
+  'submission.failed': '⚠︎',
+  'submission.retrying': '↻',
+  'submission.adjusted': '⇄',
+  'alert.sent': '‼︎',
   'egress.blocked': '⛔︎',
   'egress.allowed': '✓',
   'sandbox.created': '▢',
@@ -41,6 +52,7 @@ const SOURCE: Record<string, string> = {
   webhook: 'webhook',
   cli: 'API',
   front_door: 'chat',
+  helm: 'Helm scheduler',
 };
 
 /** Everything the agent did and why. Polls while open; new items are announced politely. */
@@ -86,7 +98,8 @@ export function Timeline() {
                     e.type.endsWith('error') ||
                     e.type.endsWith('failed') ||
                     e.type === 'egress.blocked' ||
-                    e.payload.injectionSuspected === true
+                    e.payload.injectionSuspected === true ||
+                    e.payload.critical === true
                       ? 'font-medium text-flare'
                       : 'font-medium'
                   }

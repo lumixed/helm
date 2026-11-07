@@ -6,14 +6,17 @@ submits their finished work on time with a last-chance hold and a receipt.
 
 Built at HackCamp 2026. Full spec: [`docs/PRD.md`](docs/PRD.md).
 
-> **Status: Phase 0.** The agent is deployed on Maritime and answers chat and webhooks (Gate G1).
-> Still open: agent → backend calls on Maritime, which need an API key with the `secrets` scope.
-> See [`docs/maritime-notes.md`](docs/maritime-notes.md).
+> **Status (2026-11-07):** on Maritime with one agent per student. Working: syllabus intake and review,
+> morning brief (platform cron), email change detection with provenance (M6), scheduled submission
+> to a demo portal with hold notice, retries, receipts and alerts (M7), agent timeline with Maritime
+> lifecycle webhooks, and a per-agent egress allowlist. Not built yet: policy panel, `/maritime`
+> scorecard, sandbox parsing, desktop submission. See [`docs/audit-v1.md`](docs/audit-v1.md) and
+> [`docs/maritime-notes.md`](docs/maritime-notes.md).
 
 ## Layout
 
 ```
-apps/web          Next.js backend + student app (API routes, scheduler and mock portal later)
+apps/web          Next.js backend + student app (API routes, scheduler, demo portal at /mock-portal)
 agent/            Per-student agent: Maritime custom container (GET /health, POST /chat, GET /schedules)
 packages/shared   zod schemas shared by web and agent: message envelope, timeline events, schedules
 docs/             PRD, Maritime notes, user research

@@ -72,6 +72,10 @@ export interface MaritimeClient {
   invokeWebhook(agentId: string, token: string, body: string): Promise<void>;
   setPolicy(externalId: string, policy: Record<string, number>): Promise<void>;
   deleteEndUser(externalId: string): Promise<void>;
+  /** Upsert one env var on an agent (secret = encrypted at rest). Needs the secrets scope. */
+  setEnv(agentId: string, key: string, value: string, secret: boolean): Promise<void>;
+  /** Hot-reload saved env into the running agent (falls back to a restart). */
+  reloadEnv(agentId: string): Promise<void>;
   getNetwork(agentId: string): Promise<AgentNetwork>;
   putNetwork(
     agentId: string,
@@ -239,6 +243,12 @@ export function createMaritimeClient(opts: {
     },
     async deleteEndUser(externalId) {
       await call('DELETE', `/api/v1/end-users/${enc(externalId)}`);
+    },
+    async setEnv(agentId, key, value, secret) {
+      await call('POST', `/api/agents/${enc(agentId)}/env`, { key, value, isSecret: secret });
+    },
+    async reloadEnv(agentId) {
+      await call('POST', `/api/agents/${enc(agentId)}/reload-env`);
     },
   };
 }

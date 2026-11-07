@@ -6,6 +6,8 @@ import { AgentStatus } from '@/components/AgentStatus';
 import { BriefCard } from '@/components/BriefCard';
 import { ChangesCard } from '@/components/ChangesCard';
 import { SimulateEmail } from '@/components/SimulateEmail';
+import { SubmissionAlerts } from '@/components/SubmissionsBoard';
+import { listSubmissions } from '@/lib/submissions';
 import { demoEmailTemplates } from '@/lib/demo-emails';
 import { listChanges } from '@/lib/inbox';
 import { todaysBrief } from '@/lib/briefs';
@@ -28,6 +30,7 @@ export default async function TodayPage() {
     todaysBrief(db, fullUser),
     listChanges(db, fullUser),
   ]);
+  const submissions = await listSubmissions(db, fullUser);
   const demo = process.env.DEMO_MODE === 'true';
   const pickable = confirmed
     .filter((a) => a.status === 'todo' || a.status === 'in_progress')
@@ -42,6 +45,12 @@ export default async function TodayPage() {
       title={user.name ? `Today, ${user.name}` : 'Today'}
       actions={
         <nav aria-label="Main" className="flex gap-1">
+          <Link
+            href="/submissions"
+            className="min-h-11 rounded-xl px-3 py-2 font-medium underline-offset-4 hover:underline"
+          >
+            Submit
+          </Link>
           <Link
             href="/timeline"
             className="min-h-11 rounded-xl px-3 py-2 font-medium underline-offset-4 hover:underline"
@@ -65,6 +74,8 @@ export default async function TodayPage() {
           {pending.length} new deadline{pending.length === 1 ? '' : 's'} to check →
         </Link>
       )}
+
+      <SubmissionAlerts initial={submissions} />
 
       <ChangesCard pending={changes.pending} applied={changes.applied} assignments={pickable} />
 

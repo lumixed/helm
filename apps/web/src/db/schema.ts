@@ -89,6 +89,8 @@ export const agents = pgTable(
     configHash: text('config_hash'),
     /** Hash of the egress allowlist last applied at Maritime (PRD v2 WP-5). */
     networkHash: text('network_hash'),
+    /** When the demo-portal login was put in the agent's encrypted env (WP-0.5). */
+    portalEnvAt: timestamp('portal_env_at', { withTimezone: true }),
     createdAt: createdAt(),
     lastSeenAt: timestamp('last_seen_at', { withTimezone: true }),
   },
@@ -235,6 +237,13 @@ export const submissions = pgTable(
     nextAttemptAt: timestamp('next_attempt_at', { withTimezone: true }),
     lastError: text('last_error'),
     idempotencyKey: text('idempotency_key').notNull(),
+    /** File hash the student approved with the Schedule tap (PRD 12 consent). */
+    consentSha256: text('consent_sha256'),
+    /** http (form post) or desktop (real browser, PRD v2 WP-7). */
+    driver: text('driver').notNull().default('http'),
+    /** When the current attempt was handed to the agent; a run with no result times out. */
+    runRequestedAt: timestamp('run_requested_at', { withTimezone: true }),
+    escalatedAt: timestamp('escalated_at', { withTimezone: true }),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
@@ -253,7 +262,9 @@ export const receipts = pgTable('receipts', {
   confirmationId: text('confirmation_id').notNull(),
   submittedAt: timestamp('submitted_at', { withTimezone: true }).notNull(),
   portalSnapshotRef: text('portal_snapshot_ref'),
+  fileName: text('file_name'),
   fileSha256: text('file_sha256').notNull(),
+  driver: text('driver'),
   createdAt: createdAt(),
 });
 
@@ -341,3 +352,45 @@ export const appSecrets = pgTable('app_secrets', {
   ref: text('ref'),
   createdAt: createdAt(),
 });
+
+/**
+ * The DEMO PORTAL's own records (PRD section 13): a stand-in for an LMS. It keeps metadata and
+ * a hash of each file, never the file itself.
+ */
+export const portalSubmissions = pgTable(
+  'portal_submissions',
+  {
+    id: id(),
+    userId: userRef(),
+    assignmentId: uuid('assignment_id')
+      .notNull()
+      .references(() => assignments.id, { onDelete: 'cascade' }),
+    idempotencyKey: text('idempotency_key').notNull(),
+    confirmationId: text('confirmation_id').notNull(),
+    fileName: text('file_name').notNull(),
+    fileSize: integer('file_size').notNull(),
+    fileSha256: text('file_sha256').notNull(),
+    /** agent (Helm submitted it) or manual (the student used the portal form). */
+    via: text('via').notNull().default('agent'),
+    submittedAt: timestamp('submitted_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex('portal_submissions_idem_uq').on(t.userId, t.idempotencyKey),
+    uniqueIndex('portal_submissions_assignment_uq').on(t.userId, t.assignmentId),
+  ],
+);
+
+/** Demo portal switches per student: failure injection (PRD 13, M9). */
+export const portalState = pgTable('portal_state', {
+  userId: uuid('user_id')
+    .primaryKey()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  /** The next N submit calls fail. */
+  failNext: integer('fail_next').notNull().default(0),
+  /** 503 (portal down) or timeout (hangs until the caller gives up). */
+  failMode: text('fail_mode').notNull().default('503'),
+  updatedAt: updatedAt(),
+});
+
+export type Submission = typeof submissions.$inferSelect;
+export type PortalSubmission = typeof portalSubmissions.$inferSelect;

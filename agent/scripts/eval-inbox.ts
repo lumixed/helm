@@ -153,10 +153,14 @@ const local = (iso: string | null) =>
 let pass = 0;
 for (const c of cases) {
   const t0 = Date.now();
-  const { change, model } = await classifyEmail(c.email, { timezone: tz, assignments }, {
-    apiKey,
-    models,
-  });
+  const { change, model } = await classifyEmail(
+    c.email,
+    { timezone: tz, assignments },
+    {
+      apiKey,
+      models,
+    },
+  );
   const target = assignments.find((a) => a.id === change.assignmentId) ?? null;
   const d = decideChange(change, target, new Date(at));
   const problems: string[] = [];

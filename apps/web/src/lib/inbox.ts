@@ -15,6 +15,7 @@ import type { AgentTransport } from './agent-transport';
 import { saveIntakeResult } from './assignments';
 import { formatWhen } from './format';
 import { recordSent } from './maritime-webhooks';
+import { onAssignmentDueChanged } from './submissions';
 
 /** POST /api/inbox/ingest. The body goes to the agent; the backend keeps only a hash of it. */
 export const IngestBody = z.object({
@@ -321,7 +322,9 @@ export async function applyChange(
       .set({ notes: a.notes ? `${a.notes}\n${note}` : note, ...bump })
       .where(eq(schema.assignments.id, a.id));
   }
-  // M7 will shift or flag scheduled submissions for this assignment here (PRD section 12).
+  // Scheduled submissions follow the new deadline by the PRD 12 rules (shift, keep or hold).
+  if (c.field === 'due_at' && c.newValue)
+    await onAssignmentDueChanged(db, userId, a.id, new Date(c.newValue));
   return { ok: true, assignmentId: a.id };
 }
 
