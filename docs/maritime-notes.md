@@ -125,6 +125,12 @@ Create response JSON shape: `.results.data.id` (CLI wraps responses in `{meta, r
 - Syllabus eval (`pnpm --filter @helm/agent eval`, 2 fictional syllabi, 15 deadlines): **15/15 due dates and 15/15 weights correct**. The embedded prompt injection was ignored and reported as a warning.
 - Local scripts in this sandbox need `NODE_USE_ENV_PROXY=1` for Node's `fetch` to use the proxy.
 
+## Gate G2 on production (2026-11-07)
+
+`data210.pdf` uploaded through `helm-pi-fawn.vercel.app` → Files API to the student's agent (`/data/inbox/syllabi/`) → webhook `intake.parse` → Gemini → `/api/agent/intake/result`. **25 s** from upload to "done", 7/7 deadlines with correct dates and weights. The backend stored no copy of the file.
+
+Agent releases: `helm-image-v0-3` (`…da6496698c9d`), `helm-image-v0-4` (`…11a7f1af985a`). Test agents `helm-g1`, `user_spike1`, `user_spike2` are **stopped** so their heartbeats don't use the 5-awake limit (`maritime start <name>` to bring one back).
+
 ## Open items
 
 - [x] Start the Maritime free trial.
