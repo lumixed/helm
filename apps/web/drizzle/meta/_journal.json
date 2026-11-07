@@ -29,6 +29,13 @@
       "when": 1794090546118,
       "tag": "0003_brief_request_and_events",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1794091354681,
+      "tag": "0004_maritime_events",
+      "breakpoints": true
     }
   ]
 }

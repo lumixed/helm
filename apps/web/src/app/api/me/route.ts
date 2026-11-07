@@ -12,6 +12,7 @@ import {
 } from '@/lib/provisioning';
 import { clearSessionCookie, currentUser } from '@/lib/session';
 import { maritimeOrNull, ProfileUpdate, publicProfile } from '@/lib/student';
+import { ensureWebhookSubscription } from '@/lib/maritime-webhooks';
 
 export const dynamic = 'force-dynamic';
 
@@ -27,6 +28,11 @@ export async function GET() {
     const [row] = await db.select().from(schema.agents).where(eq(schema.agents.userId, user.id));
     agent = row ?? (await ensureLocalAgent(db, user, localDir));
   } else if (maritime) {
+    if (process.env.APP_BASE_URL) {
+      await ensureWebhookSubscription(db, maritime, process.env.APP_BASE_URL).catch(
+        (err: unknown) => console.warn('[webhooks] subscription check failed', String(err)),
+      );
+    }
     agent = await refreshAgent(db, user, maritime);
     if (!agent || (agent.status === 'error' && !agent.maritimeAgentId)) {
       agent = await ensureStudentAgent(db, user, maritime, provisionEnvFromProcess());

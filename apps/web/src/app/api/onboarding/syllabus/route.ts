@@ -3,6 +3,7 @@ import { encodeAgentMessage } from '@helm/shared';
 import { eq } from 'drizzle-orm';
 import { getDb, schema } from '@/db';
 import { agentTransport } from '@/lib/agent-transport';
+import { recordSent } from '@/lib/maritime-webhooks';
 import { fail, json } from '@/lib/http';
 import { currentUser } from '@/lib/session';
 
@@ -78,5 +79,6 @@ export async function POST(req: Request) {
     console.error('[syllabus] hand-off to agent failed', err);
     return fail(502, 'Could not reach your agent. Try again in a moment.');
   }
+  await recordSent(db, user.id, agent.maritimeAgentId, `intake:${intakeId}`, 'intake.parse');
   return json({ intakeId, fileName }, 202);
 }

@@ -62,6 +62,9 @@ export interface MaritimeClient {
   invokeWebhook(agentId: string, token: string, body: string): Promise<void>;
   setPolicy(externalId: string, policy: Record<string, number>): Promise<void>;
   deleteEndUser(externalId: string): Promise<void>;
+  listWebhooks(): Promise<{ id: string; url: string; isActive?: boolean }[]>;
+  createWebhook(url: string, events?: string[]): Promise<{ id: string; secret: string }>;
+  deleteWebhook(id: string): Promise<void>;
 }
 
 export function maritimeFromEnv(): MaritimeClient {
@@ -170,6 +173,24 @@ export function createMaritimeClient(opts: {
     },
     async setPolicy(externalId, policy) {
       await call('PUT', `/api/v1/end-users/${enc(externalId)}/policy`, { policy });
+    },
+    async listWebhooks() {
+      const { data } = await call<unknown>('GET', '/api/v1/webhooks');
+      return (Array.isArray(data) ? data : ((data as { results?: unknown[] })?.results ?? [])) as {
+        id: string;
+        url: string;
+        isActive?: boolean;
+      }[];
+    },
+    async createWebhook(url, events) {
+      const { data } = await call<{ id: string; secret: string }>('POST', '/api/v1/webhooks', {
+        url,
+        ...(events ? { events } : {}),
+      });
+      return data;
+    },
+    async deleteWebhook(id) {
+      await call('DELETE', `/api/v1/webhooks/${enc(id)}`);
     },
     async deleteEndUser(externalId) {
       await call('DELETE', `/api/v1/end-users/${enc(externalId)}`);

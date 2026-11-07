@@ -82,6 +82,13 @@ function fakeMaritime() {
       if (!a) throw new MaritimeError(404, 'not found', `/api/agents/${id}`);
       return { id, name: a.externalId, status: a.status, externalId: a.externalId };
     },
+    async listWebhooks() {
+      return [];
+    },
+    async createWebhook() {
+      return { id: 'wh', secret: 's' };
+    },
+    async deleteWebhook() {},
     async mkdir() {},
     async uploadFile() {},
     async writeFile(id, path, content) {

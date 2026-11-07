@@ -3,6 +3,7 @@ import { encodeAgentMessage } from '@helm/shared';
 import { eq } from 'drizzle-orm';
 import { getDb, schema } from '@/db';
 import { agentTransport } from '@/lib/agent-transport';
+import { recordSent } from '@/lib/maritime-webhooks';
 import { fail, json } from '@/lib/http';
 import { currentUser } from '@/lib/session';
 
@@ -33,5 +34,6 @@ export async function POST(): Promise<Response> {
     console.error('[brief] could not reach agent', err);
     return fail(502, 'Could not reach your agent. Try again in a moment.');
   }
+  await recordSent(db, user.id, agent.maritimeAgentId, requestId, 'brief.generate');
   return json({ requestId, requestedAt: new Date().toISOString() }, 202);
 }

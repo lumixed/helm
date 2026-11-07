@@ -283,3 +283,31 @@ export type User = typeof users.$inferSelect;
 export type AgentRow = typeof agents.$inferSelect;
 export type Assignment = typeof assignments.$inferSelect;
 export type Course = typeof courses.$inferSelect;
+
+/** Maritime lifecycle webhooks (agent.woken, agent.sleeping, ...) and our own markers (PRD v2 WP-1). */
+export const maritimeEvents = pgTable(
+  'maritime_events',
+  {
+    id: id(),
+    userId: uuid('user_id').references(() => users.id, { onDelete: 'cascade' }),
+    maritimeAgentId: text('maritime_agent_id'),
+    kind: text('kind').notNull(),
+    /** X-Maritime-Delivery: the same on every retry, so retries are stored once. */
+    deliveryId: text('delivery_id'),
+    payloadJson: jsonb('payload_json').$type<Record<string, unknown>>().notNull().default({}),
+    occurredAt: timestamp('occurred_at', { withTimezone: true }).notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    uniqueIndex('maritime_events_delivery_uq').on(t.deliveryId),
+    index('maritime_events_user_time_idx').on(t.userId, t.occurredAt),
+  ],
+);
+
+/** Server-held secrets created at runtime (e.g. the webhook signing secret Maritime returns once). */
+export const appSecrets = pgTable('app_secrets', {
+  key: text('key').primaryKey(),
+  value: text('value').notNull(),
+  ref: text('ref'),
+  createdAt: createdAt(),
+});

@@ -24,6 +24,12 @@ const ICON: Record<string, string> = {
   'sandbox.created': '▢',
   'sandbox.command': '›',
   'sandbox.ended': '▣',
+  'maritime:agent.woken': '⏻',
+  'maritime:agent.sleeping': '☾',
+  'maritime:agent.deployed': '⇪',
+  'maritime:agent.error': '⚠︎',
+  'maritime:agent.llm_limit_reached': '⏸︎',
+  'maritime:end_user.created': '+',
 };
 
 const SOURCE: Record<string, string> = {
@@ -84,7 +90,10 @@ export function Timeline() {
                 </p>
                 <p className="text-sm text-sea-800/80 dark:text-sea-100/80">
                   <time dateTime={e.occurredAt}>{e.atLabel}</time>
+                  {e.type.startsWith('maritime:') && ' · Maritime lifecycle event'}
                   {src && ` · via ${src}`}
+                  {typeof e.payload.latencyMs === 'number' &&
+                    ` · woke ${(e.payload.latencyMs / 1000).toFixed(1)}s after the trigger`}
                   {ms !== null && ` · ${(ms / 1000).toFixed(1)}s`}
                   {typeof e.payload.writer === 'string' && ` · written by ${e.payload.writer}`}
                   {typeof e.payload.model === 'string' && ` · ${e.payload.model}`}
