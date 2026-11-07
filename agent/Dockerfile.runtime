@@ -1,0 +1,10 @@
+# Runtime image for the Helm agent. Used from agent/.deploy (prebuilt bundle).
+# Maritime gotchas (docs/frameworks/custom): bind $PORT, install ca-certificates,
+# persist only to /data, and use an exec-form CMD (never a shell string).
+FROM node:22-slim
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates \
+  && rm -rf /var/lib/apt/lists/*
+WORKDIR /app
+ENV NODE_ENV=production
+COPY server.mjs ./server.mjs
+CMD ["node", "/app/server.mjs"]

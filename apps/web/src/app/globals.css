@@ -1,0 +1,23 @@
+@import 'tailwindcss';
+
+@theme {
+  --color-sea-50: #f0f6fb;
+  --color-sea-100: #dcebf6;
+  --color-sea-600: #1f5f8b;
+  --color-sea-800: #143e5c;
+  --color-sea-950: #0a2133;
+  --color-flare: #d9480f;
+}
+
+:root {
+  color-scheme: light dark;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

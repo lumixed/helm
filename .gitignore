@@ -1,0 +1,15 @@
+node_modules/
+dist/
+.next/
+out/
+coverage/
+*.tsbuildinfo
+.env
+.env.*
+!.env.example
+.maritime/
+agent/data/
+*.zip
+.DS_Store
+agent/.deploy/
+apps/web/next-env.d.ts

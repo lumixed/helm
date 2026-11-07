@@ -1,0 +1,100 @@
+#!/usr/bin/env bash
+# Gate G1 spike (PRD section 8): deploy the hello-world Helm agent to Maritime and prove
+#   1. it builds and boots as a custom container,
+#   2. it answers chat,
+#   3. it is reachable by webhook (and shows how the webhook body arrives at POST /chat),
+#   4. it can call the backend (if HELM_BACKEND_URL is set),
+#   5. Maritime picked up its GET /schedules entries.
+#
+# Usage:
+#   export MARITIME_API_KEY=mk_...
+#   export HELM_BACKEND_URL=https://<public backend>        # optional, for step 4
+#   export AGENT_EVENT_SECRET=<same value as the backend>   # optional, for step 4
+#   scripts/g1-spike.sh [agent-name]
+#
+# Record what you see in docs/maritime-notes.md.
+set -euo pipefail
+
+NAME="${1:-helm-g1}"
+STUDENT_ID="${HELM_STUDENT_ID:-g1_spike}"
+API="${MARITIME_API_URL:-https://api.maritime.sh}"
+: "${MARITIME_API_KEY:?Set MARITIME_API_KEY (mk_...)}"
+export MARITIME_TOKEN="$MARITIME_API_KEY"
+
+cd "$(dirname "$0")/.."
+auth=(-H "Authorization: Bearer $MARITIME_API_KEY")
+step() { printf '\n\033[1m== %s\033[0m\n' "$*"; }
+
+step "Bundle agent"
+pnpm --filter @helm/agent build
+
+step "Create agent '$NAME' from agent/.deploy"
+if existing=$(maritime list --json 2>/dev/null | jq -er --arg n "$NAME" '(.results // .)[] | select(.name == $n) | .id' 2>/dev/null); then
+  # Redeploying a ZIP source onto an existing agent is not documented yet; recreate instead.
+  echo "Agent '$NAME' already exists ($existing). To rebuild it from fresh source:"
+  echo "  maritime delete $NAME --yes && $0 $NAME"
+  AGENT_ID="$existing"
+else
+  out=$(maritime agents create --name "$NAME" --framework custom --from-dir agent/.deploy \
+    --external-id "$STUDENT_ID" --idle-ttl-seconds 300 --json)
+  echo "$out" | jq '.results // .' | head -40
+  AGENT_ID=$(echo "$out" | jq -r '.results.id // .id')
+fi
+echo "AGENT_ID=$AGENT_ID"
+
+step "Set env (applies on next boot, then reload)"
+env_args=(HELM_STUDENT_ID="$STUDENT_ID" HELM_DEBUG_INBOUND=1 TZ=America/Vancouver HELM_BRIEF_TIME=07:30)
+if [[ -n "${HELM_BACKEND_URL:-}" ]]; then env_args+=(HELM_BACKEND_URL="$HELM_BACKEND_URL"); fi
+maritime env set "$NAME" "${env_args[@]}" --no-secret
+if [[ -n "${HELM_BACKEND_URL:-}" && -n "${AGENT_EVENT_SECRET:-}" ]]; then
+  token=$(AGENT_EVENT_SECRET="$AGENT_EVENT_SECRET" node -e "
+    const c=require('node:crypto');
+    console.log(c.createHmac('sha256', process.env.AGENT_EVENT_SECRET).update('helm-agent:v1:$STUDENT_ID').digest('base64url'))")
+  maritime env set "$NAME" HELM_AGENT_TOKEN="$token"
+fi
+
+step "Wait for the agent to be ready"
+for _ in $(seq 1 72); do
+  status=$(curl -fsS "${auth[@]}" "$API/api/agents/$AGENT_ID" | jq -r '.status // .results.status')
+  echo "status=$status"
+  case "$status" in
+    running | sleeping | idle | ready) break ;;
+    error | failed) maritime history "$NAME" --json | jq -r '.[0].buildLog // .results[0].buildLog' | tail -40; exit 1 ;;
+  esac
+  sleep 5
+done
+maritime env reload "$NAME" || true
+sleep 5
+
+ping() {
+  jq -cn --arg r "$1" --arg s "$STUDENT_ID" --arg n "$2" \
+    '{v: 1, type: "ping", requestId: $r, studentId: $s, payload: {note: $n}}'
+}
+
+step "Chat (REST)"
+curl -fsS "${auth[@]}" -H 'content-type: application/json' "$API/api/agents/$AGENT_ID/chat" \
+  -d "$(jq -n --arg m "$(ping "chat-$(date +%s)" 'via chat api')" '{message: $m}')" | jq .
+
+step "Webhook"
+wh=$(curl -fsS "${auth[@]}" "$API/api/webhooks/$AGENT_ID/token")
+echo "$wh" | jq 'del(.token) | del(.url)'
+WH_TOKEN=$(echo "$wh" | jq -r '.token')
+# Send the envelope itself as the JSON body, the way the backend scheduler will.
+curl -sS -w '\nHTTP %{http_code}\n' -H "X-Maritime-Webhook-Token: $WH_TOKEN" -H 'content-type: application/json' \
+  "$API/api/webhooks/$AGENT_ID" -d "$(ping "webhook-$(date +%s)" 'via webhook')"
+echo "Webhooks are delivered in the background; waiting 10 s..."
+sleep 10
+
+step "Logs: how did the webhook body arrive?"
+maritime logs "$NAME" --json 2>/dev/null | jq -r '(.results // .)[]? | (.message // .msg // tostring)' | grep -E '\[chat|\[event|helm-agent' | tail -20 \
+  || maritime logs "$NAME" | tail -40
+
+step "Triggers (should include the /schedules entries once Maritime polls them)"
+maritime triggers list "$NAME" || true
+
+if [[ -n "${HELM_BACKEND_URL:-}" ]]; then
+  step "Backend received"
+  curl -fsS "$HELM_BACKEND_URL/api/dev/events?studentId=$STUDENT_ID" | jq '.events[] | {type, reason, requestId}' || true
+fi
+
+step "Done. Record findings in docs/maritime-notes.md"
