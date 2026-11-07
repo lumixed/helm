@@ -1,22 +1,16 @@
-import { createHmac, timingSafeEqual } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
+import { eq } from 'drizzle-orm';
+import type { Db } from '@/db';
+import { schema } from '@/db';
 
-/**
- * Phase 0 agent tokens: HMAC(AGENT_EVENT_SECRET, studentId), so no database is needed yet.
- * Phase 1 replaces this with the PRD design (random 32 bytes per agent, only a hash stored),
- * keeping the same `verifyAgentToken` signature.
- */
-export function deriveAgentToken(studentId: string, secret = requireSecret()): string {
-  return createHmac('sha256', secret).update(`helm-agent:v1:${studentId}`).digest('base64url');
+/** Random 32 bytes per agent; only the SHA-256 hash is stored (PRD section 16). */
+export function generateAgentToken(): { token: string; hash: string } {
+  const token = randomBytes(32).toString('base64url');
+  return { token, hash: hashAgentToken(token) };
 }
 
-export function verifyAgentToken(
-  studentId: string,
-  token: string,
-  secret = requireSecret(),
-): boolean {
-  const expected = Buffer.from(deriveAgentToken(studentId, secret));
-  const given = Buffer.from(token);
-  return expected.length === given.length && timingSafeEqual(expected, given);
+export function hashAgentToken(token: string): string {
+  return createHash('sha256').update(token).digest('hex');
 }
 
 export function bearer(req: Request): string | null {
@@ -25,8 +19,12 @@ export function bearer(req: Request): string | null {
   return m?.[1]?.trim() || null;
 }
 
-function requireSecret(): string {
-  const s = process.env.AGENT_EVENT_SECRET;
-  if (!s || s.length < 16) throw new Error('AGENT_EVENT_SECRET must be set (16+ chars)');
-  return s;
+/** The agent behind a token, or null. Constant work regardless of match (hash lookup). */
+export async function findAgentByToken(db: Db, token: string) {
+  const [row] = await db
+    .select({ agentId: schema.agents.id, userId: schema.agents.userId })
+    .from(schema.agents)
+    .where(eq(schema.agents.agentTokenHash, hashAgentToken(token)))
+    .limit(1);
+  return row ?? null;
 }
