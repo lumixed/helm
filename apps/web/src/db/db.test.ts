@@ -7,11 +7,11 @@ describe('database schema', () => {
     const db = await connect(undefined); // in-memory PGlite, migrations applied
     const [u] = await db
       .insert(schema.users)
-      .values({ email: 'Maya@Example.edu', name: 'Maya' })
+      .values({ email: 'maya@example.edu', name: 'Maya' })
       .returning();
     expect(u?.timezone).toBe('America/Vancouver');
 
-    // Emails are unique case-insensitively.
+    // Emails are unique (the app lowercases them before writing).
     await expect(db.insert(schema.users).values({ email: 'maya@example.edu' })).rejects.toThrow();
 
     // One agent per student.

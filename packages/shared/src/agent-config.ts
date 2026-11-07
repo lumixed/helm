@@ -1,12 +1,13 @@
 import { z } from 'zod';
 
 /**
- * Per-student settings the backend writes to the agent's private disk at
- * /data/helm/config.json (Maritime Files API). The agent re-reads it on every message, so
- * changes apply without a restart. Env vars with the same meaning are the fallback.
+ * Per-student settings that can change after the agent exists (brief time, timezone). The backend
+ * writes them to the agent's private disk at /data/helm/config.json through the Maritime Files
+ * API, and the agent re-reads the file on every message, so changes apply without a restart.
  *
- * Why a file and not env vars: setting agent env needs an API key with the `secrets` scope,
- * and env passed at create time is ignored for end-user agents (verified 2026-11-07).
+ * Secrets (agent token, Gemini key, portal login) are NOT in this file. They are passed as
+ * encrypted env vars when the agent is created (`initialEnvVars`), see docs/maritime-notes.md.
+ * Every field is optional; missing ones fall back to env vars.
  */
 export const AGENT_CONFIG_PATH = '/data/helm/config.json';
 
@@ -14,13 +15,25 @@ const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/;
 
 export const AgentRuntimeConfig = z.object({
   v: z.literal(1).default(1),
-  studentId: z.string().min(1).max(128),
-  backendUrl: z.url(),
-  agentToken: z.string().min(20).max(200),
-  timezone: z.string().min(1).max(64).default('America/Vancouver'),
-  briefTime: z.string().regex(HHMM).default('07:30'),
-  heartbeatCron: z.string().default('*/15 * * * *'),
-  demoMode: z.boolean().default(false),
+  timezone: z.string().min(1).max(64).optional(),
+  briefTime: z.string().regex(HHMM).optional(),
+  heartbeatCron: z.string().optional(),
+  demoMode: z.boolean().optional(),
 });
 export type AgentRuntimeConfig = z.infer<typeof AgentRuntimeConfig>;
 export type AgentRuntimeConfigInput = z.input<typeof AgentRuntimeConfig>;
+
+/** Env var names the backend sets at agent creation. */
+export const AGENT_ENV = {
+  studentId: 'HELM_STUDENT_ID',
+  backendUrl: 'HELM_BACKEND_URL',
+  agentToken: 'HELM_AGENT_TOKEN',
+  geminiKey: 'GEMINI_API_KEY',
+  geminiModel: 'GEMINI_MODEL',
+  portalUrl: 'PORTAL_URL',
+  portalUsername: 'PORTAL_USERNAME',
+  portalPassword: 'PORTAL_PASSWORD',
+  timezone: 'TZ',
+  briefTime: 'HELM_BRIEF_TIME',
+  demoMode: 'DEMO_MODE',
+} as const;

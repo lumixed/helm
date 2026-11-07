@@ -70,7 +70,8 @@ export const users = pgTable(
     onboardedAt: timestamp('onboarded_at', { withTimezone: true }),
     createdAt: createdAt(),
   },
-  (t) => [uniqueIndex('users_email_uq').on(sql`lower(${t.email})`)],
+  // Emails are stored lowercased by the app, so a plain unique index is enough.
+  (t) => [uniqueIndex('users_email_uq').on(t.email)],
 );
 
 export const agents = pgTable(

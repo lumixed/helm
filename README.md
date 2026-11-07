@@ -55,8 +55,6 @@ curl -s localhost:8787/chat -H 'content-type: application/json' \
 ```bash
 npm install -g maritime-cli
 export MARITIME_API_KEY=mk_...
-export HELM_BACKEND_URL=https://<public backend>   # optional
-export AGENT_EVENT_SECRET=<same as backend>        # optional
 scripts/g1-spike.sh helm-g1
 ```
 

@@ -35,13 +35,13 @@ export interface Runtime {
   heartbeatCron: string;
   demoMode: boolean;
   /** Where the values came from, for the status endpoint. */
-  source: 'file' | 'env' | 'none';
+  source: 'env+file' | 'file' | 'env' | 'none';
   error?: string;
 }
 
 let cache: { mtimeMs: number; value: Runtime } | null = null;
 
-/** Settings that can change at any time: config file first, then env vars. */
+/** Secrets and identity come from env vars; changeable settings from the config file. */
 export function runtime(file = paths.runtimeConfig): Runtime {
   let stat: fs.Stats | null = null;
   try {
@@ -57,12 +57,22 @@ export function runtime(file = paths.runtimeConfig): Runtime {
   let value: Runtime;
   try {
     const parsed = AgentRuntimeConfig.safeParse(JSON.parse(fs.readFileSync(file, 'utf8')));
-    value = parsed.success
-      ? { ...parsed.data, backendUrl: parsed.data.backendUrl.replace(/\/+$/, ''), source: 'file' }
-      : {
-          ...fromEnv,
-          error: `config file invalid: ${parsed.error.issues[0]?.message ?? 'unknown'}`,
-        };
+    if (parsed.success) {
+      const f = parsed.data;
+      value = {
+        ...fromEnv,
+        timezone: f.timezone ?? fromEnv.timezone,
+        briefTime: f.briefTime ?? fromEnv.briefTime,
+        heartbeatCron: f.heartbeatCron ?? fromEnv.heartbeatCron,
+        demoMode: f.demoMode ?? fromEnv.demoMode,
+        source: fromEnv.studentId ? 'env+file' : 'file',
+      };
+    } else {
+      value = {
+        ...fromEnv,
+        error: `config file invalid: ${parsed.error.issues[0]?.message ?? 'unknown'}`,
+      };
+    }
   } catch (err) {
     value = { ...fromEnv, error: `config file unreadable: ${String(err)}` };
   }

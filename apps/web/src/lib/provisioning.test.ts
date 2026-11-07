@@ -1,0 +1,171 @@
+import { beforeEach, describe, expect, it } from 'vitest';
+import { eq } from 'drizzle-orm';
+import { connect, schema, type Db } from '@/db';
+import type { User } from '@/db/schema';
+import { hashAgentToken } from './agent-auth';
+import {
+  MaritimeError,
+  type CreateAgentInput,
+  type MaritimeClient,
+  type MaritimeAgentStatus,
+} from './maritime';
+import { deleteStudent, ensureStudentAgent, refreshAgent } from './provisioning';
+
+const env = {
+  appBaseUrl: 'https://helm.test',
+  agentImage: 'ghcr.io/x/agent@sha256:abc',
+  geminiApiKey: 'g-key',
+  demoMode: true,
+};
+
+function fakeMaritime() {
+  const state = {
+    endUsers: new Map<string, unknown>(),
+    agents: new Map<
+      string,
+      { id: string; externalId: string; status: MaritimeAgentStatus; input: CreateAgentInput }
+    >(),
+    files: new Map<string, string>(),
+    creates: 0,
+  };
+  const client: MaritimeClient = {
+    async upsertEndUser(id, body) {
+      state.endUsers.set(id, body);
+    },
+    async createEndUserAgent(externalId, input) {
+      state.creates++;
+      const found = [...state.agents.values()].find((a) => a.externalId === externalId);
+      if (found)
+        return {
+          agent: { id: found.id, name: externalId, status: found.status, externalId },
+          created: false,
+        };
+      const a = {
+        id: `mt_${state.agents.size + 1}`,
+        externalId,
+        status: 'deploying' as MaritimeAgentStatus,
+        input,
+      };
+      state.agents.set(a.id, a);
+      return { agent: { id: a.id, name: externalId, status: a.status, externalId }, created: true };
+    },
+    async getAgent(id) {
+      const a = state.agents.get(id);
+      if (!a) throw new MaritimeError(404, 'not found', `/api/agents/${id}`);
+      return { id, name: a.externalId, status: a.status, externalId: a.externalId };
+    },
+    async mkdir() {},
+    async writeFile(id, path, content) {
+      state.files.set(`${id}:${path}`, content);
+    },
+    async webhookToken() {
+      return 'wh';
+    },
+    async invokeWebhook() {},
+    async setPolicy() {},
+    async deleteEndUser(id) {
+      for (const [k, a] of state.agents) if (a.externalId === id) state.agents.delete(k);
+      state.endUsers.delete(id);
+    },
+  };
+  return { client, state };
+}
+
+let db: Db;
+let user: User;
+
+beforeEach(async () => {
+  db = await connect(undefined);
+  [user] = (await db
+    .insert(schema.users)
+    .values({ email: 'maya@example.edu', name: 'Maya', briefTimeLocal: '08:00' })
+    .returning()) as [User];
+});
+
+describe('ensureStudentAgent', () => {
+  it('creates one agent with secrets seeded as encrypted env', async () => {
+    const { client, state } = fakeMaritime();
+    const row = await ensureStudentAgent(db, user, client, env);
+    expect(row.maritimeAgentId).toBe('mt_1');
+    expect(row.status).toBe('provisioning');
+
+    const seeded = state.agents.get('mt_1')!.input;
+    expect(seeded.imageName).toBe(env.agentImage);
+    const byKey = Object.fromEntries(seeded.initialEnvVars!.map((e) => [e.key, e]));
+    expect(byKey.HELM_STUDENT_ID?.value).toBe(user.id);
+    expect(byKey.HELM_BACKEND_URL?.value).toBe('https://helm.test');
+    expect(byKey.HELM_AGENT_TOKEN?.isSecret).toBe(true);
+    expect(byKey.GEMINI_API_KEY).toMatchObject({ value: 'g-key', isSecret: true });
+    // Only the hash is stored, and it matches the seeded token.
+    expect(row.agentTokenHash).toBe(hashAgentToken(byKey.HELM_AGENT_TOKEN!.value));
+  });
+
+  it('is idempotent across repeated sign-ins', async () => {
+    const { client, state } = fakeMaritime();
+    const a = await ensureStudentAgent(db, user, client, env);
+    const b = await ensureStudentAgent(db, user, client, env);
+    expect(b.id).toBe(a.id);
+    expect(state.creates).toBe(1);
+    expect(await db.select().from(schema.agents)).toHaveLength(1);
+  });
+
+  it('two students get two distinct agents', async () => {
+    const { client } = fakeMaritime();
+    const [other] = (await db
+      .insert(schema.users)
+      .values({ email: 'li@example.edu' })
+      .returning()) as [User];
+    const a = await ensureStudentAgent(db, user, client, env);
+    const b = await ensureStudentAgent(db, other, client, env);
+    expect(a.maritimeAgentId).not.toBe(b.maritimeAgentId);
+  });
+
+  it('records a readable error when Maritime refuses', async () => {
+    const { client } = fakeMaritime();
+    client.createEndUserAgent = async () => {
+      throw new MaritimeError(402, 'trial_required', '/x');
+    };
+    const row = await ensureStudentAgent(db, user, client, env);
+    expect(row.status).toBe('error');
+    expect(row.lastError).toMatch(/billing/);
+    // A retry after the problem is fixed works and keeps one row.
+    const ok = fakeMaritime();
+    const again = await ensureStudentAgent(db, user, ok.client, env);
+    expect(again.maritimeAgentId).toBe('mt_1');
+  });
+
+  it('flags an agent that already existed at Maritime with an unknown token', async () => {
+    const { client } = fakeMaritime();
+    await client.createEndUserAgent(`user_${user.id}`, {});
+    const row = await ensureStudentAgent(db, user, client, env);
+    expect(row.status).toBe('error');
+    expect(row.lastError).toMatch(/older token/);
+  });
+});
+
+describe('refreshAgent', () => {
+  it('maps status and writes the settings file once ready', async () => {
+    const { client, state } = fakeMaritime();
+    await ensureStudentAgent(db, user, client, env);
+    state.agents.get('mt_1')!.status = 'active';
+    const row = await refreshAgent(db, user, client);
+    expect(row?.status).toBe('ready');
+    expect(row?.configWrittenAt).toBeInstanceOf(Date);
+    const file = JSON.parse(state.files.get('mt_1:/data/helm/config.json')!);
+    expect(file).toMatchObject({ v: 1, briefTime: '08:00', timezone: 'America/Vancouver' });
+    expect(JSON.stringify(file)).not.toMatch(/token/i);
+  });
+});
+
+describe('deleteStudent', () => {
+  it('removes the Maritime end user and all Helm rows', async () => {
+    const { client, state } = fakeMaritime();
+    await ensureStudentAgent(db, user, client, env);
+    await deleteStudent(db, user.id, client);
+    expect(state.agents.size).toBe(0);
+    expect(await db.select().from(schema.users).where(eq(schema.users.id, user.id))).toHaveLength(
+      0,
+    );
+    expect(await db.select().from(schema.agents)).toHaveLength(0);
+  });
+});

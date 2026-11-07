@@ -94,17 +94,29 @@ Agent `helm-g1` (`ff993841-ea17-4ad9-b12d-205d2f6a6094`), created with `maritime
 | Agent → backend                 | ⏳ events queued in `/data/outbox.jsonl`; needs `HELM_BACKEND_URL` + token env vars                                                                              |
 | Container stdout in `GET /logs` | ❌ our `console.log` lines don't appear there (only platform and `[auto-pair]` lines). For debugging, use the Files API (`/data`) or events sent to the backend. |
 
-**Blocker found:** `maritime env set` returns `403 "This API key lacks the 'secrets' scope"`. The backend needs that scope for M2 (per-student `HELM_AGENT_TOKEN`, `GEMINI_API_KEY`, portal creds). Fix: mint a key that has the `secrets` scope (Settings → API keys → Advanced, or a full-access default key).
+**Scope finding:** `maritime env set` (POST `/api/agents/{id}/env`) needs the `secrets` scope, and deleting an end user needs `manage`. Our key has neither. Seeding env vars **at creation** does work without them (see below), so only deletion is blocked. A full-access key fixes both.
 
 Create response JSON shape: `.results.data.id` (CLI wraps responses in `{meta, results}`).
+
+## Per-student provisioning (verified 2026-11-07)
+
+- `POST /api/v1/end-users/{external_id}/agents` with `{"framework":"custom", "imageName": "<built image>", "idleTtlSeconds": 300, "initialEnvVars": [{"key","value","isSecret"}]}`.
+  - The env field is **`initialEnvVars`** (`isSecret` per entry). A field called `env` is silently ignored.
+  - Seeded secrets show as `isSecret: true` in `GET /api/agents/{id}/env`. This works with a key that lacks the `secrets` scope.
+  - Returns `201` on create and the **same agent** on repeat calls (we saw the same id). Helm treats a non-201 for a student with no stored agent id as "token unknown" and flags it.
+- **Reuse the built image.** Every agent built from the same source shares one digest (`ghcr.io/maritime-sh/maritime-agent-builds@sha256:…`, from `GET /api/agents/{id}` → `imageName`). Creating from `imageName` reached `active` in **54 s**, versus ~4 min for a source build (`uploadS3Key`). Set it as `MARITIME_AGENT_IMAGE` in the backend.
+- The CLI's `--upload-key` maps to `uploadS3Key` in the create body. The SDK (0.11) can't send `framework`, so `apps/web/src/lib/maritime.ts` calls REST directly.
+- Changeable settings (brief time, timezone) go in `/data/helm/config.json` through `PUT /api/agents/{id}/files/write` (needs no special scope). The agent re-reads it each message, and Maritime's schedule sync picks up a new brief time on its next poll.
+- Policy: `PUT /api/v1/end-users/{external_id}/policy` with `{"policy": {...snake_case caps}}`.
 
 ## Open items
 
 - [x] Start the Maritime free trial.
 - [x] Run `scripts/g1-spike.sh` (results above).
-- [ ] Get an API key with the `secrets` scope, set env on `helm-g1`, and confirm agent → backend events arrive.
+- [ ] Get a full-access key (`manage` for deleting students). Then delete the spike end users `user_spike1` and `user_spike2`.
+- [ ] Confirm agent → backend events arrive once the backend is on a public URL (Vercel).
 - [ ] Measure wake-from-sleep latency (wait > 300 s idle, then chat).
-- [ ] Confirm the SDK/REST field for a custom image or upload key in `endUsers.createAgent`.
+- [x] Custom image / upload key field for end-user agents (`imageName` / `uploadS3Key`, see above).
 - [ ] Confirm whether a ZIP source can be redeployed onto an existing agent (needed so every student agent gets new versions). Fallback: GitHub source (needs the Maritime GitHub App on `lumixed/helm`) or a public GHCR image.
 - [ ] Which lifecycle webhooks exist (`agent.sleeping` is shown in the end-users docs). Use them for the timeline if available.
 - [ ] Does background work after a `/chat` reply keep the VM awake, or can it be frozen mid-task? Mitigation for now: set `idleSleepSeconds` ≥ 120 in the end-user policy.

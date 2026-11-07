@@ -9,6 +9,7 @@ let dir: string;
 async function setup(fetchImpl?: typeof fetch) {
   dir = fs.mkdtempSync(path.join(os.tmpdir(), 'helm-agent-'));
   process.env.HELM_DATA_DIR = dir;
+  process.env.HELM_STUDENT_ID = 's1';
   writeConfig(dir, { briefTime: '07:30', timezone: 'America/Vancouver' });
   vi.resetModules();
   const { createApp } = await import('./server');
@@ -38,15 +39,7 @@ async function setup(fetchImpl?: typeof fetch) {
 
 function writeConfig(d: string, extra: Record<string, unknown> = {}) {
   fs.mkdirSync(path.join(d, 'helm'), { recursive: true });
-  fs.writeFileSync(
-    path.join(d, 'helm', 'config.json'),
-    JSON.stringify({
-      studentId: 's1',
-      backendUrl: 'https://backend.test/',
-      agentToken: 'a'.repeat(43),
-      ...extra,
-    }),
-  );
+  fs.writeFileSync(path.join(d, 'helm', 'config.json'), JSON.stringify({ v: 1, ...extra }));
 }
 
 const ping = encodeAgentMessage({ v: 1, type: 'ping', requestId: 'req-1', studentId: 's1' });
@@ -147,7 +140,7 @@ describe('agent http contract', () => {
   it('reads live settings from the config file and picks up changes', async () => {
     const { app } = await setup();
     const status = (await (await app.request('/')).json()) as Record<string, unknown>;
-    expect(status).toMatchObject({ studentId: 's1', configSource: 'file', configError: null });
+    expect(status).toMatchObject({ studentId: 's1', configSource: 'env+file', configError: null });
 
     // Brief time changes land in /schedules without a restart.
     await new Promise((r) => setTimeout(r, 20)); // ensure a new mtime
@@ -166,7 +159,7 @@ describe('agent http contract', () => {
   it('reports an invalid config file instead of crashing', async () => {
     const { app } = await setup();
     await new Promise((r) => setTimeout(r, 20));
-    fs.writeFileSync(path.join(dir, 'helm', 'config.json'), '{"studentId": 5}');
+    fs.writeFileSync(path.join(dir, 'helm', 'config.json'), '{"briefTime": "25:99"}');
     const status = (await (await app.request('/')).json()) as Record<string, unknown>;
     expect(String(status.configError)).toMatch(/config file invalid/);
   });

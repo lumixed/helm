@@ -179,4 +179,4 @@ CREATE UNIQUE INDEX "courses_user_code_uq" ON "courses" USING btree ("user_id",u
 CREATE UNIQUE INDEX "inbox_user_body_uq" ON "inbox_messages" USING btree ("user_id","body_hash");--> statement-breakpoint
 CREATE UNIQUE INDEX "submissions_idem_uq" ON "submissions" USING btree ("idempotency_key");--> statement-breakpoint
 CREATE INDEX "submissions_due_idx" ON "submissions" USING btree ("status","submit_at");--> statement-breakpoint
-CREATE UNIQUE INDEX "users_email_uq" ON "users" USING btree (lower("email"));
+CREATE UNIQUE INDEX "users_email_uq" ON "users" USING btree ("email");
