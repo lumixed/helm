@@ -109,6 +109,14 @@ Create response JSON shape: `.results.data.id` (CLI wraps responses in `{meta, r
 - Changeable settings (brief time, timezone) go in `/data/helm/config.json` through `PUT /api/agents/{id}/files/write` (needs no special scope). The agent re-reads it each message, and Maritime's schedule sync picks up a new brief time on its next poll.
 - Policy: `PUT /api/v1/end-users/{external_id}/policy` with `{"policy": {...snake_case caps}}`.
 
+## Live end-to-end on Vercel (2026-11-07)
+
+- Sign-in on `helm-pi-fawn.vercel.app` provisioned a student agent in 2 s (API call). The agent reached `active` and its settings file was written about **70 s** after sign-in.
+- Env seeded at create showed up correctly (`HELM_AGENT_TOKEN` and `GEMINI_API_KEY` as secrets).
+- Bug found: `APP_BASE_URL` was set to an example value, so the agent reported to the wrong host and the old emitter dropped the events on 404. Fixed: the backend URL is now also in the settings file (re-sent whenever it changes), and the agent keeps events queued on any status except 400/413/422.
+- **Upgrading an existing agent's image** works with `maritime deploy <id> --source docker --image <digest> --wait` (110 s). `/data` was kept.
+- Image for agent 0.3.0: `ghcr.io/maritime-sh/maritime-agent-builds@sha256:404bdaedbe58caaf09f1304ef4d0f3184dbab579189fa5590d9eda6496698c9d` (built by agent `helm-image-v0-3`).
+
 ## Open items
 
 - [x] Start the Maritime free trial.
@@ -117,7 +125,7 @@ Create response JSON shape: `.results.data.id` (CLI wraps responses in `{meta, r
 - [ ] Confirm agent → backend events arrive once the backend is on a public URL (Vercel).
 - [ ] Measure wake-from-sleep latency (wait > 300 s idle, then chat).
 - [x] Custom image / upload key field for end-user agents (`imageName` / `uploadS3Key`, see above).
-- [ ] Confirm whether a ZIP source can be redeployed onto an existing agent (needed so every student agent gets new versions). Fallback: GitHub source (needs the Maritime GitHub App on `lumixed/helm`) or a public GHCR image.
+- [x] Getting new versions onto existing agents: build once from a ZIP, then `maritime deploy --source docker --image <digest>` on each agent (keeps `/data`).
 - [ ] Which lifecycle webhooks exist (`agent.sleeping` is shown in the end-users docs). Use them for the timeline if available.
 - [ ] Does background work after a `/chat` reply keep the VM awake, or can it be frozen mid-task? Mitigation for now: set `idleSleepSeconds` ≥ 120 in the end-user policy.
 

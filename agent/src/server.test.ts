@@ -163,4 +163,32 @@ describe('agent http contract', () => {
     const status = (await (await app.request('/')).json()) as Record<string, unknown>;
     expect(String(status.configError)).toMatch(/config file invalid/);
   });
+
+  it('keeps events queued when the backend answers 404 (wrong URL)', async () => {
+    const { chat } = await setup(
+      (async () => new Response('Not found', { status: 404 })) as typeof fetch,
+    );
+    const res = await chat(ping);
+    expect(((await res.json()) as { response: string }).response).toMatch(
+      /0 events delivered, 2 queued/,
+    );
+  });
+
+  it('drops a batch the backend calls malformed (400) so it cannot block the queue', async () => {
+    const { chat } = await setup(
+      (async () => new Response('bad', { status: 400 })) as typeof fetch,
+    );
+    await chat(ping);
+    expect(fs.readFileSync(path.join(dir, 'outbox.jsonl'), 'utf8').trim()).toBe('');
+  });
+
+  it('takes the backend URL from the settings file over the env var', async () => {
+    await setup();
+    process.env.HELM_BACKEND_URL = 'https://old.example';
+    await new Promise((r) => setTimeout(r, 20));
+    writeConfig(dir, { backendUrl: 'https://new.example/' });
+    const { runtime } = await import('./config');
+    expect(runtime().backendUrl).toBe('https://new.example');
+    delete process.env.HELM_BACKEND_URL;
+  });
 });

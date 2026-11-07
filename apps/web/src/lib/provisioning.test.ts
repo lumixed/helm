@@ -155,6 +155,31 @@ describe('refreshAgent', () => {
     expect(file).toMatchObject({ v: 1, briefTime: '08:00', timezone: 'America/Vancouver' });
     expect(JSON.stringify(file)).not.toMatch(/token/i);
   });
+
+  it('re-sends settings when the app URL changes, and not otherwise', async () => {
+    const { client, state } = fakeMaritime();
+    process.env.APP_BASE_URL = 'https://wrong.example';
+    await ensureStudentAgent(db, user, client, env);
+    state.agents.get('mt_1')!.status = 'active';
+    await refreshAgent(db, user, client);
+    const read = () => JSON.parse(state.files.get('mt_1:/data/helm/config.json')!);
+    expect(read().backendUrl).toBe('https://wrong.example');
+
+    let writes = 0;
+    const orig = client.writeFile;
+    client.writeFile = async (...a) => {
+      writes++;
+      return orig(...a);
+    };
+    await refreshAgent(db, user, client);
+    expect(writes).toBe(0); // unchanged settings are not re-sent
+
+    process.env.APP_BASE_URL = 'https://helm.test/';
+    await refreshAgent(db, user, client);
+    expect(writes).toBe(1);
+    expect(read().backendUrl).toBe('https://helm.test');
+    delete process.env.APP_BASE_URL;
+  });
 });
 
 describe('deleteStudent', () => {

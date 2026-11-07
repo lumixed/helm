@@ -15,6 +15,8 @@ const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/;
 
 export const AgentRuntimeConfig = z.object({
   v: z.literal(1).default(1),
+  /** Overrides HELM_BACKEND_URL, so a corrected app URL reaches existing agents. */
+  backendUrl: z.url().optional(),
   timezone: z.string().min(1).max(64).optional(),
   briefTime: z.string().regex(HHMM).optional(),
   heartbeatCron: z.string().optional(),

@@ -85,6 +85,8 @@ export const agents = pgTable(
     agentTokenHash: text('agent_token_hash').notNull(),
     lastError: text('last_error'),
     configWrittenAt: timestamp('config_written_at', { withTimezone: true }),
+    /** Hash of the settings file last written, so changes (e.g. a new app URL) are re-sent. */
+    configHash: text('config_hash'),
     createdAt: createdAt(),
     lastSeenAt: timestamp('last_seen_at', { withTimezone: true }),
   },

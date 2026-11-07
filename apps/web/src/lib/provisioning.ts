@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { eq } from 'drizzle-orm';
 import {
   AGENT_CONFIG_PATH,
@@ -146,7 +147,7 @@ export async function refreshAgent(
     const status = STATUS_MAP[remote.status] ?? row.status;
     const lastError = row.lastError?.startsWith('Agent already existed') ? row.lastError : null;
     await setAgent(db, row.id, { status: lastError ? 'error' : status, lastError });
-    if (!lastError && (status === 'ready' || status === 'asleep') && !row.configWrittenAt) {
+    if (!lastError && (status === 'ready' || status === 'asleep') && settingsStale(row, user)) {
       await writeAgentSettings(db, user, maritime);
     }
   } catch (err) {
@@ -159,7 +160,26 @@ export async function refreshAgent(
   return getAgentRow(db, user.id);
 }
 
-/** Push changeable settings (brief time, timezone) to the agent's disk. Wakes the agent. */
+/** The settings file content for a student. Contains no secrets. */
+export function agentSettings(user: User, appBaseUrl = process.env.APP_BASE_URL): string {
+  const settings: AgentRuntimeConfigInput = {
+    v: 1,
+    ...(appBaseUrl ? { backendUrl: appBaseUrl.replace(/\/+$/, '') } : {}),
+    timezone: user.timezone,
+    briefTime: user.briefTimeLocal,
+    demoMode: process.env.DEMO_MODE === 'true',
+  };
+  return JSON.stringify(AgentRuntimeConfig.parse(settings), null, 2);
+}
+
+const hashSettings = (content: string) => createHash('sha256').update(content).digest('hex');
+
+/** True when the agent's settings file is missing or out of date. */
+export function settingsStale(row: AgentRow, user: User): boolean {
+  return row.configHash !== hashSettings(agentSettings(user));
+}
+
+/** Push changeable settings (backend URL, brief time, timezone) to the agent's disk. Wakes it. */
 export async function writeAgentSettings(
   db: Db,
   user: User,
@@ -167,19 +187,13 @@ export async function writeAgentSettings(
 ): Promise<void> {
   const row = await getAgentRow(db, user.id);
   if (!row?.maritimeAgentId) return;
-  const settings: AgentRuntimeConfigInput = {
-    v: 1,
-    timezone: user.timezone,
-    briefTime: user.briefTimeLocal,
-    demoMode: process.env.DEMO_MODE === 'true',
-  };
-  const content = JSON.stringify(AgentRuntimeConfig.parse(settings), null, 2);
+  const content = agentSettings(user);
   await maritime.mkdir(
     row.maritimeAgentId,
     AGENT_CONFIG_PATH.slice(0, AGENT_CONFIG_PATH.lastIndexOf('/')),
   );
   await maritime.writeFile(row.maritimeAgentId, AGENT_CONFIG_PATH, content);
-  await setAgent(db, row.id, { configWrittenAt: new Date() });
+  await setAgent(db, row.id, { configWrittenAt: new Date(), configHash: hashSettings(content) });
 }
 
 /** Delete a student everywhere: their Maritime end user (agents, tokens) and all Helm data. */

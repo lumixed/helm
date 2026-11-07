@@ -7,6 +7,10 @@ import { paths, runtime } from './config';
  * Sends timeline events to the backend. If the backend is unreachable, events are queued on
  * /data and retried on the next wake, so nothing is lost while the VM sleeps (PRD section 7).
  */
+/** Only these mean the payload itself is bad; anything else is retried later. */
+const DROP_STATUSES = new Set([400, 413, 422]);
+const MAX_QUEUED = 2000;
+
 export interface EmitterTarget {
   backendUrl: string;
   token: string;
@@ -91,10 +95,18 @@ export class Emitter {
           body: JSON.stringify(body),
           signal: AbortSignal.timeout(8000),
         });
-        // 4xx other than 429 will never succeed; drop it so one bad event can't block the queue.
-        if (!res.ok && (res.status === 429 || res.status >= 500)) break;
-        if (!res.ok)
+        if (!res.ok && !DROP_STATUSES.has(res.status)) {
+          // Wrong URL (404), bad or rotated token (401/403), busy or down: keep the events and
+          // retry on the next wake. Losing them would hide what the agent did (PRD principle 3).
+          console.error(
+            `[emit] backend answered ${res.status}; keeping ${pending.length - sent} queued`,
+          );
+          break;
+        }
+        if (!res.ok) {
+          // The batch itself is malformed and will never be accepted; drop it so it can't block the queue.
           console.error(`[emit] backend rejected batch: ${res.status} ${await res.text()}`);
+        }
         sent += batch.length;
       } catch (err) {
         console.error(
@@ -104,8 +116,10 @@ export class Emitter {
         break;
       }
     }
-    this.write(pending.slice(sent));
-    return { sent, queued: pending.length - sent };
+    const rest = pending.slice(sent);
+    // Bound the outbox so a long outage can't fill the disk; the oldest events go first.
+    this.write(rest.slice(-MAX_QUEUED));
+    return { sent, queued: Math.min(rest.length, MAX_QUEUED) };
   }
 
   private append(events: AgentEvent[]) {

@@ -39,7 +39,7 @@ export function publicProfile(user: User, agent: AgentRow | null) {
           maritimeAgentId: agent.maritimeAgentId,
           lastError: agent.lastError,
           lastSeenAt: agent.lastSeenAt?.toISOString() ?? null,
-          settingsSynced: Boolean(agent.configWrittenAt),
+          settingsSynced: Boolean(agent.configHash),
         }
       : null,
   };

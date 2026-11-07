@@ -12,7 +12,7 @@ export const config = {
   port: Number(process.env.PORT ?? 8787),
   /** Maritime gives each /chat delivery 30 s. Answer well inside it. */
   replyBudgetMs: Number(process.env.HELM_REPLY_BUDGET_MS ?? 20_000),
-  version: process.env.HELM_AGENT_VERSION ?? '0.2.0',
+  version: process.env.HELM_AGENT_VERSION ?? '0.3.0',
   debugInbound: process.env.HELM_DEBUG_INBOUND === '1',
 };
 
@@ -61,6 +61,7 @@ export function runtime(file = paths.runtimeConfig): Runtime {
       const f = parsed.data;
       value = {
         ...fromEnv,
+        backendUrl: f.backendUrl ? f.backendUrl.replace(/\/+$/, '') : fromEnv.backendUrl,
         timezone: f.timezone ?? fromEnv.timezone,
         briefTime: f.briefTime ?? fromEnv.briefTime,
         heartbeatCron: f.heartbeatCron ?? fromEnv.heartbeatCron,
