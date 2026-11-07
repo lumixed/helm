@@ -108,3 +108,5 @@ Create response JSON shape: `.results.data.id` (CLI wraps responses in `{meta, r
 - [ ] Confirm whether a ZIP source can be redeployed onto an existing agent (needed so every student agent gets new versions). Fallback: GitHub source (needs the Maritime GitHub App on `lumixed/helm`) or a public GHCR image.
 - [ ] Which lifecycle webhooks exist (`agent.sleeping` is shown in the end-users docs). Use them for the timeline if available.
 - [ ] Does background work after a `/chat` reply keep the VM awake, or can it be frozen mid-task? Mitigation for now: set `idleSleepSeconds` ≥ 120 in the end-user policy.
+
+hi
