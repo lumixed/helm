@@ -65,6 +65,17 @@ export default async function SetupPage({
       )}
 
       <AgentStatus initial={agent} />
+      {user.onboarded && (
+        <a
+          href="/maritime"
+          className="rounded-card border border-line bg-surface p-5 transition-colors hover:border-line-strong"
+        >
+          <span className="block font-semibold text-ink">Under the hood →</span>
+          <span className="mt-0.5 block text-sm text-muted">
+            See how your agent is isolated on Maritime, with live evidence.
+          </span>
+        </a>
+      )}
     </Shell>
   );
 }

@@ -35,7 +35,7 @@ export function AppNav() {
             <span className="text-[17px] font-semibold tracking-tight">Helm</span>
           </Link>
           <nav aria-label="Main" className="hidden items-center gap-7 sm:flex">
-            {ITEMS.map(({ href, label }) => (
+            {[...ITEMS, { href: '/maritime', label: 'Under the hood' }].map(({ href, label }) => (
               <Link
                 key={href}
                 href={href}
