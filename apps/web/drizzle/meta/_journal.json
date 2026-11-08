@@ -78,6 +78,13 @@
       "when": 1794101078377,
       "tag": "0010_desktop_apps",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1794106395616,
+      "tag": "0011_push_tokens",
+      "breakpoints": true
     }
   ]
 }

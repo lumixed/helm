@@ -1,3 +1,4 @@
+import { sendPushToUser } from './push';
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { eq } from 'drizzle-orm';
 import type { BriefContent } from '@helm/shared';
@@ -101,12 +102,14 @@ export interface Button {
 
 /** Send to the student's linked chat, if any. Never throws: Telegram is additive (PRD risks). */
 export async function sendToUser(db: Db, userId: string, text: string, buttons: Button[][] = []) {
-  if (!telegramToken()) return false;
+  // Native app push (same message), then Telegram. Either one counts as delivered to the phone.
+  const pushed = await sendPushToUser(db, userId, text, buttons).catch(() => false);
+  if (!telegramToken()) return pushed;
   const [u] = await db
     .select({ chat: schema.users.telegramChatId })
     .from(schema.users)
     .where(eq(schema.users.id, userId));
-  if (!u?.chat) return false;
+  if (!u?.chat) return pushed;
   try {
     await tg('sendMessage', {
       chat_id: u.chat,
@@ -127,7 +130,7 @@ export async function sendToUser(db: Db, userId: string, text: string, buttons: 
     return true;
   } catch (err) {
     console.warn('[telegram] send failed', String(err).slice(0, 200));
-    return false;
+    return pushed;
   }
 }
 

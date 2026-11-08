@@ -425,3 +425,20 @@ export const desktopApps = pgTable(
   (t) => [uniqueIndex('desktop_apps_user_app_uq').on(t.userId, t.app)],
 );
 export type DesktopApp = typeof desktopApps.$inferSelect;
+
+/** Expo push tokens from the native app (one person can have several phones). */
+export const pushTokens = pgTable(
+  'push_tokens',
+  {
+    id: id(),
+    userId: userRef(),
+    token: text('token').notNull(),
+    platform: text('platform').notNull().default('ios'),
+    createdAt: createdAt(),
+    lastUsedAt: timestamp('last_used_at', { withTimezone: true }),
+  },
+  (t) => [
+    uniqueIndex('push_tokens_token_uq').on(t.token),
+    index('push_tokens_user_idx').on(t.userId),
+  ],
+);
