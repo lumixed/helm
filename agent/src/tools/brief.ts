@@ -81,8 +81,11 @@ export async function buildBrief(
       }
     : null;
   // Time-blocking: code places today's focus work around the calendar.
+  // Items more than a day overdue are listed, not scheduled: they were probably handled already
+  // (mark them done) or can't be worked on any more (a missed exam).
+  const plannable = focus.filter((f) => new Date(f.dueAt).getTime() > now.getTime() - 86_400_000);
   const plan = planDay(
-    focus.map((f) => ({ id: f.assignmentId, title: f.title, minutes: f.minutes })),
+    plannable.map((f) => ({ id: f.assignmentId, title: f.title, minutes: f.minutes })),
     schedule,
     now,
     state.timezone,

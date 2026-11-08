@@ -42,3 +42,40 @@ describe('money line in the brief', () => {
     });
   });
 });
+
+describe('time-blocks skip long-overdue items', () => {
+  it('lists an item overdue by weeks but gives it no work block', async () => {
+    const state: AgentState = {
+      studentId: 's1',
+      name: '',
+      timezone: 'America/Vancouver',
+      briefTimeLocal: '07:30',
+      assignments: [
+        {
+          id: 'old',
+          courseCode: 'X',
+          title: 'Midterm',
+          dueAt: '2026-10-14T17:00:00Z',
+          weightPct: 20,
+          estMinutes: 180,
+          progressPct: 0,
+          status: 'todo',
+        },
+        {
+          id: 'new',
+          courseCode: 'X',
+          title: 'Lab',
+          dueAt: '2026-11-11T06:59:00Z',
+          weightPct: 10,
+          estMinutes: 60,
+          progressPct: 0,
+          status: 'todo',
+        },
+      ],
+      changes: [],
+    };
+    const b = await buildBrief(state, new Date('2026-11-10T15:00:00Z'), 'cron');
+    expect(b.focus.map((f) => f.title)).toContain('Midterm');
+    expect(b.blocks.map((x) => x.title)).toEqual(['Lab']);
+  });
+});
