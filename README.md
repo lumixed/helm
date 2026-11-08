@@ -1,23 +1,55 @@
 # Helm
 
-**A private assistant for everyone.** Each person gets their own Helm agent in an isolated
-[Maritime](https://maritime.sh) micro-VM. It reads their Gmail (read-only) and the messages they share
-from WhatsApp, Instagram or texts, keeps one list of everything they owe and when, tells them every
-morning what to do today (in the app and on Telegram), and hands in routine things for them with a
-last-chance hold and a receipt.
+**One private AI agent per person, built on [Maritime](https://maritime.sh).** Helm is a personal
+assistant: it reads the documents, email, calendar and chats you give it, keeps one list of
+everything you owe and when, writes you a brief every morning, reminds you on time, and handles the
+busywork with your OK. Because an assistant that reads your mail should live in its own locked room,
+every person gets their **own agent in its own Maritime VM**, never a shared server holding everyone's inbox.
 
-Built at HackCamp 2026. Specs: [`docs/PRD.md`](docs/PRD.md) (v1),
-[`docs/PRD-v2-maritime.md`](docs/PRD-v2-maritime.md) (Maritime-first),
-[`docs/PRD-v3-pivot.md`](docs/PRD-v3-pivot.md) (for everyone; wins where they conflict).
+- **Live:** <https://helmedaddy.buzz> (also <https://helm-pi-fawn.vercel.app>)
+- **Built at HackCamp 2026** by Jefferson Abraham and Jasmine Kwan, for **Best Agent on Maritime**.
+- Maritime details and verified behaviour: [`docs/maritime-notes.md`](docs/maritime-notes.md).
+  Specs: [`docs/PRD.md`](docs/PRD.md), [`docs/PRD-v2-maritime.md`](docs/PRD-v2-maritime.md),
+  [`docs/PRD-v3-pivot.md`](docs/PRD-v3-pivot.md).
 
-> **Status (2026-11-07):** on Maritime with one agent per person. Working: any document with dates →
-> review → plan; morning brief (platform cron) in the app and on Telegram; changes detected in email
-> and shared messages with provenance; scheduled hand-ins to a demo portal with hold notice, retries,
-> receipts and alerts; read-only Gmail with the token only in the agent's encrypted env; installable
-> app with a share target; timeline with Maritime lifecycle webhooks; per-agent egress allowlist.
-> Under the hood: a live `/maritime` scorecard shows each Maritime feature in use, from real data.
-> Not built yet: policy panel, sandbox parsing, desktop hand-ins.
-> Helm does not read WhatsApp or Instagram by itself: people share messages with it.
+## What it does
+
+|                        |                                                                                                                                                                                                                                                                                                       |
+| ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Reads**              | Syllabi, leases, bills and invites (opened in a throwaway Maritime sandbox); Gmail (read-only, token only in the agent); Canvas calendar feeds; shared messages; WhatsApp, Instagram and Slack (beta) on the person's own private Maritime desktop, where they log in themselves and Helm only reads. |
+| **Plans**              | One ranked list (nothing counts until you confirm it), a morning brief, time blocks around Google Calendar, reminders, an evening check-in and a weekly review on `/week`.                                                                                                                            |
+| **Talks**              | Ask chat and Telegram: questions, "dentist Friday 3pm" (added to the plan), "remind me to pay rent on the 1st", "remember I don't work Sundays" (kept only on the agent's disk), email drafts. Each answer shows which model wrote it.                                                                |
+| **Acts, with your OK** | Scheduled hand-ins with a hold window and receipts (to a demo portal), Gmail drafts and follow-up nudges for mail nobody answered. Helm never sends on its own.                                                                                                                                       |
+| **Everywhere**         | Web, installable PWA, an iPhone/Android app (Expo, `apps/mobile`), Telegram and push.                                                                                                                                                                                                                 |
+
+## Maritime features in use
+
+Each has live evidence on the app's **Under the hood** page (`/maritime`), read from Maritime itself.
+
+| Feature                          | What Helm uses it for                                                                                  |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| End users                        | One agent per person, created at sign-up                                                               |
+| Custom container                 | Our own agent image (`helm-image-vN` releases, upgraded with `/data` kept)                             |
+| Persistent `/data`               | Memory, notes the person asked it to remember, event outbox, settings, documents                       |
+| Sleep and wake                   | Idle agents sleep; they restore from a snapshot in seconds                                             |
+| Platform cron (`GET /schedules`) | Morning brief, safety-net heartbeat, routines, and **one cron per reminder**, in the person's timezone |
+| Webhooks                         | New documents, email, hand-ins and "send my brief now" wake the agent                                  |
+| Encrypted secrets                | The agent's token and keys (Gemini, Gmail, Canvas, portal login) live only in its VM                   |
+| Files API                        | Settings written to the agent's disk (brief time, reminders, routines)                                 |
+| Scoped tokens                    | Ask uses a 15-minute chat-only token straight to the person's agent                                    |
+| Spend and wake caps              | Per-person limits, shown in Settings                                                                   |
+| Lifecycle webhooks               | Wake, sleep and error events on the timeline                                                           |
+| Network allowlist                | The agent can reach only approved hosts; a red-team demo shows a blocked request                       |
+| Sandboxes                        | Untrusted documents are parsed in a throwaway machine, never in the agent                              |
+| Linux desktop + takeover         | Private browser for WhatsApp, Instagram and Slack; the person logs in through a takeover link          |
+| Maritime LLM                     | The agent's own capped AI (opt-in with `MARITIME_LLM=on`), with Gemini as fallback                     |
+
+## Honest limits
+
+- Hand-ins go to a clearly labelled **demo portal**, not a real course site.
+- **Slack** and **"waiting on"** follow-ups are built and tested in code, not yet against a real Slack workspace or mailbox.
+- The iPhone app runs in Expo Go; there is no App Store build yet. Server push needs a development build.
+- Maritime LLM is opt-in: on an account without AI credits Maritime skips scheduled wakes, so Gemini is the default.
 
 ## Screenshots
 
@@ -36,7 +68,8 @@ Built at HackCamp 2026. Specs: [`docs/PRD.md`](docs/PRD.md) (v1),
 ## Layout
 
 ```
-apps/web          Next.js backend + student app (API routes, scheduler, demo portal at /mock-portal)
+apps/web          Next.js backend + app (API routes, scheduler, demo portal at /mock-portal)
+apps/mobile       Expo app for iPhone and Android (native shell, local notifications)
 agent/            Per-student agent: Maritime custom container (GET /health, POST /chat, GET /schedules)
 packages/shared   zod schemas shared by web and agent: message envelope, timeline events, schedules
 docs/             PRD, Maritime notes, user research
@@ -85,10 +118,10 @@ scripts/g1-spike.sh helm-g1
 
 ```bash
 export MARITIME_API_KEY=mk_...
-scripts/upgrade-agents.sh v0-5
+scripts/upgrade-agents.sh v0-18                  # add MARITIME_LLM=on to switch agents to Maritime LLM
 ```
 
-This builds the agent on Maritime as `helm-image-v0-5` and moves every student's agent onto it, keeping their `/data`. With `MARITIME_AGENT_IMAGE=auto` on the backend, new sign-ups use it automatically.
+This builds the agent on Maritime as `helm-image-v0-18` and moves every student's agent onto it, keeping their `/data`. With `MARITIME_AGENT_IMAGE=auto` on the backend, new sign-ups use it automatically.
 
 ## Run everything locally
 
