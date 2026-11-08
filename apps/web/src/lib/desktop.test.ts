@@ -81,12 +81,26 @@ beforeEach(async () => {
 });
 
 describe('connect', () => {
+  it('opens the address again when the first try was lost (browser still starting)', async () => {
+    screen = { screen: 'other', chats: [] };
+    await connectApp(db, maya, 'whatsapp', deps());
+    expect(log.filter((l) => l.startsWith('act '))).toHaveLength(2);
+  });
+
+  it("doesn't touch a desktop the person holds, and tells them how to open the app", async () => {
+    mode = 'human';
+    const r = await connectApp(db, maya, 'whatsapp', deps());
+    expect(log.some((l) => l.startsWith('act '))).toBe(false);
+    expect(r.instructions).toMatch(/go to web\.whatsapp\.com/);
+  });
+
   it("opens the app on the person's own desktop and returns a takeover link", async () => {
     const r = await connectApp(db, maya, 'whatsapp', deps());
     expect(r.url).toMatch(/^https:\/\/maritime\.sh\/computer\//);
     expect(log).toEqual([
       `ensure user_${maya.id}`,
-      'act key:ctrl+l,type:https://web.whatsapp.com,key:Return,wait:',
+      'act wait:,key:ctrl+l,type:https://web.whatsapp.com,key:Return,wait:',
+      'screenshot',
       'viewer control',
     ]);
     expect((await row()).status).toBe('linking');

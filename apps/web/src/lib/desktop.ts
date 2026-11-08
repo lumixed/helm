@@ -61,12 +61,21 @@ export async function connectApp(db: Db, user: User, app: AppId, deps: DesktopDe
   const a = APPS[app];
   const c = await deps.computers.ensure(desktopExternalId(user.id));
   if (c.mode !== 'human') {
-    await deps.computers.act(c.id, [
-      { action: 'key', text: 'ctrl+l', no_screenshot: true },
-      { action: 'type', text: a.url, no_screenshot: true },
-      { action: 'key', text: 'Return', no_screenshot: true },
-      { action: 'wait', duration: 4, no_screenshot: true },
-    ]);
+    // A brand-new desktop is still starting its browser: wait, open the address, then check the
+    // page really changed (keystrokes sent too early are lost) and try once more if not.
+    const open = (pause: number) =>
+      deps.computers.act(c.id, [
+        { action: 'wait', duration: pause, no_screenshot: true },
+        { action: 'key', text: 'ctrl+l', no_screenshot: true },
+        { action: 'type', text: a.url, no_screenshot: true },
+        { action: 'key', text: 'Return', no_screenshot: true },
+        { action: 'wait', duration: 5, no_screenshot: true },
+      ]);
+    await open(3);
+    const seen = await deps
+      .vision(await deps.computers.screenshot(c.id), a.label)
+      .catch(() => null);
+    if (seen && seen.screen === 'other') await open(2);
   }
   const link = await deps.computers.viewer(c.id, 'control', 900, `Log in to ${a.label} for Helm`);
   await db
@@ -89,7 +98,11 @@ export async function connectApp(db: Db, user: User, app: AppId, deps: DesktopDe
     `Log in to ${a.label} for Helm on your private desktop. ${a.login}`,
     [[{ text: `Open ${a.label} login`, url: link.url }]],
   );
-  return { url: link.url, expiresAt: link.expiresAt, instructions: a.login };
+  const instructions =
+    c.mode === 'human'
+      ? `If the page is blank, click the address bar and go to ${a.url.replace('https://', '')}. ${a.login}`
+      : a.login;
+  return { url: link.url, expiresAt: link.expiresAt, instructions };
 }
 
 export type CheckOutcome =
