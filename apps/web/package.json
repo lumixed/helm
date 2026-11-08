@@ -19,6 +19,7 @@
     "geist": "^1.9.2",
     "maritime-sdk": "^0.11.0",
     "next": "^16.4.5",
+    "pngjs": "^7.0.0",
     "postgres": "^4.1.0",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
@@ -27,6 +28,7 @@
   "devDependencies": {
     "@electric-sql/pglite": "^0.5.15",
     "@tailwindcss/postcss": "^4.3.5",
+    "@types/pngjs": "^6.0.5",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "drizzle-kit": "^0.31.11",

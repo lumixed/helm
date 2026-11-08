@@ -52,6 +52,7 @@ export function AppNav() {
           <nav aria-label="Main" className="hidden items-center gap-7 sm:flex">
             {[
               ...ITEMS,
+              { href: '/tasks', label: 'Tasks' },
               { href: '/reminders', label: 'Reminders' },
               { href: '/maritime', label: 'Under the hood' },
             ].map(({ href, label }) => (

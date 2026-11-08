@@ -452,6 +452,63 @@ export const desktopApps = pgTable(
 );
 export type DesktopApp = typeof desktopApps.$inferSelect;
 
+export interface WebTaskStep {
+  at: string;
+  text: string;
+  /** Same action = same signature; three in a row stops the task. */
+  sig?: string;
+}
+/** What a paused website task is waiting for. Written by code, shown to the person. */
+export type WebTaskPending =
+  | {
+      kind: 'click';
+      x: number;
+      y: number;
+      label: string;
+      host: string;
+      /** The click lands in a text box, so typing can follow it. */
+      field?: boolean;
+      askedAt: string;
+    }
+  | { kind: 'site'; host: string; askedAt: string }
+  | { kind: 'login'; reason: string; url: string; expiresAt: string; askedAt: string }
+  | { kind: 'question'; question: string; askedAt: string };
+
+/**
+ * Website tasks: the agent works through a site on the person's separate tasks desktop and stops
+ * for approval before anything final. See lib/web-tasks.ts.
+ */
+export const webTasks = pgTable(
+  'web_tasks',
+  {
+    id: id(),
+    userId: userRef(),
+    instruction: text('instruction').notNull(),
+    startUrl: text('start_url').notNull(),
+    /** Sites this task may use: what the person gave, plus any they approved along the way. */
+    allowedHosts: jsonb('allowed_hosts').$type<string[]>().notNull().default([]),
+    /** app | chat */
+    origin: text('origin').notNull().default('app'),
+    /** ready | running | approval | needs_you | done | failed | stopped */
+    status: text('status').notNull().default('running'),
+    computerId: text('computer_id'),
+    stepCount: integer('step_count').notNull().default(0),
+    stepsJson: jsonb('steps_json').$type<WebTaskStep[]>().notNull().default([]),
+    pendingJson: jsonb('pending_json').$type<WebTaskPending | null>(),
+    /** The last click landed in a text box, so typing goes somewhere known. */
+    fieldFocused: boolean('field_focused').notNull().default(false),
+    /** The latest PNG worth keeping: what's being approved, or the final screen. */
+    screenshotB64: text('screenshot_b64'),
+    result: text('result'),
+    lockedUntil: timestamp('locked_until', { withTimezone: true }),
+    finishedAt: timestamp('finished_at', { withTimezone: true }),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [index('web_tasks_user_status_idx').on(t.userId, t.status)],
+);
+export type WebTask = typeof webTasks.$inferSelect;
+
 /** Expo push tokens from the native app (one person can have several phones). */
 export const pushTokens = pgTable(
   'push_tokens',

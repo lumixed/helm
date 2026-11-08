@@ -5,7 +5,7 @@ import { AgentStatus } from '@/components/AgentStatus';
 import { BriefCard } from '@/components/BriefCard';
 import { DoneButton } from '@/components/DoneButton';
 import { ChangesCard } from '@/components/ChangesCard';
-import { IconAdd, IconArrow, IconBell, IconShare } from '@/components/icons';
+import { IconAdd, IconArrow, IconBell, IconGlobe, IconShare } from '@/components/icons';
 import { SubmissionAlerts } from '@/components/SubmissionsBoard';
 import { Banner, Card, CardTitle, Chip, Shell } from '@/components/ui';
 import { getDb } from '@/db';
@@ -272,6 +272,12 @@ export default async function TodayPage({
             body="Rent, bills, appointments. Your agent's own schedule sends them, even with Helm closed."
           />
         )}
+        <QuickLink
+          href="/tasks"
+          Icon={IconGlobe}
+          title="Do something on a website"
+          body="Renew, book, fill in a form. Helm works in a private browser and stops for your yes."
+        />
         <QuickLink
           href="/share"
           Icon={IconShare}

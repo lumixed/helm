@@ -162,6 +162,13 @@
       "when": 1794132298226,
       "tag": "0022_setup_dismissed",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1794155277609,
+      "tag": "0023_web_tasks",
+      "breakpoints": true
     }
   ]
 }

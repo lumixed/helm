@@ -19,7 +19,7 @@ export interface ComputersClient {
   wake(id: string): Promise<void>;
   /** Run actions; returns nothing (screenshots come from screenshot()). */
   act(id: string, actions: Record<string, unknown>[]): Promise<void>;
-  screenshot(id: string): Promise<Uint8Array>;
+  screenshot(id: string, format?: 'jpeg' | 'png'): Promise<Uint8Array>;
   /** Sharp close-up of a region of the model frame (default 1200x750), as PNG bytes. */
   zoom(id: string, region: [number, number, number, number]): Promise<Uint8Array>;
   sleep(id: string): Promise<void>;
@@ -84,10 +84,10 @@ export function computersClient(opts: {
     async act(id, actions) {
       await call('POST', `/${enc(id)}/actions`, { actions });
     },
-    async screenshot(id) {
+    async screenshot(id, format = 'jpeg') {
       return (await call(
         'GET',
-        `/${enc(id)}/screenshot?format=jpeg&quality=80`,
+        `/${enc(id)}/screenshot?${format === 'png' ? 'format=png' : 'format=jpeg&quality=80'}`,
         undefined,
         true,
       )) as Uint8Array;

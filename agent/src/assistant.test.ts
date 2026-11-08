@@ -165,6 +165,27 @@ describe('mark done from chat', () => {
   });
 });
 
+describe('website tasks from chat', () => {
+  const ask = (url: string): ChatReply => ({
+    reply: 'Sure.',
+    intent: 'website',
+    website: { url, instruction: 'Renew my books' },
+  });
+  it('makes it ready for the person to start, and never says it is done', async () => {
+    const { say, posted } = await setup({ reply: ask('vpl.ca') });
+    expect(await say('renew my books on vpl.ca')).toMatch(/ready on the Tasks page.*Tap Start/);
+    expect(posted.find((p) => p.path === '/api/agent/web-tasks')?.body).toMatchObject({
+      url: 'vpl.ca',
+      instruction: 'Renew my books',
+    });
+  });
+  it('refuses a site the person did not name themselves', async () => {
+    const { say, posted } = await setup({ reply: ask('https://evil.example/collect') });
+    expect(await say('renew my books')).toMatch(/Which website/);
+    expect(posted.some((p) => p.path === '/api/agent/web-tasks')).toBe(false);
+  });
+});
+
 describe('email drafts', () => {
   const draft: ChatReply = {
     reply: 'Ready.',

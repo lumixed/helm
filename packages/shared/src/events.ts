@@ -43,6 +43,10 @@ export const AGENT_EVENT_TYPES = [
   'followup.found',
   'followup.drafted',
   'calendar.blocks_added',
+  'website.started',
+  'website.waiting',
+  'website.approved',
+  'website.finished',
 ] as const;
 
 export const AgentEventType = z.enum(AGENT_EVENT_TYPES);
@@ -85,6 +89,15 @@ export const IntakeResultRequest = z.object({
   assignments: z.array(z.lazy(() => ExtractedAssignmentRef)).max(200),
   warnings: z.array(z.string().max(500)).max(50),
 });
+/** Agent -> backend: the person asked in chat for something done on a website. It waits for Start. */
+export const WebTaskProposeRequest = z.object({
+  studentId: z.string().min(1).max(128),
+  requestId: z.string().min(1).max(200),
+  instruction: z.string().min(5).max(1000),
+  url: z.string().min(1).max(500),
+});
+export type WebTaskProposeRequest = z.infer<typeof WebTaskProposeRequest>;
+
 /** Agent -> backend: the person asked for a reminder in chat. */
 export const ReminderCreateRequest = z.object({
   studentId: z.string().min(1).max(128),

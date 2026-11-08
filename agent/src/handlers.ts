@@ -47,8 +47,10 @@ import {
   ChatDraft,
   ChatMemory,
   ChatTask,
+  ChatWebsite,
   chatItems,
   chatReply,
+  siteNamedByPerson,
   toReminderRule,
   type ChatReply,
   type ChatTurn,
@@ -1242,6 +1244,13 @@ export async function handleChat(
       ? 'Saved an email draft you asked for (not sent)'
       : 'Wrote an email draft in chat';
   }
+  if (r.intent === 'website') {
+    const set = await proposeWebTaskFromChat(r, text, state.studentId, requestId, deps);
+    r = { ...r, reply: set.reply };
+    reason = set.ok
+      ? 'Got a website task ready for you to start'
+      : 'Could not set up a website task';
+  }
   if (r.intent === 'memory') {
     const set = await applyMemory(r, factMemory, facts, deps.now());
     r = { ...r, reply: set.reply };
@@ -1295,6 +1304,40 @@ export async function handleChat(
  * Quick capture: "remind me to pay rent on the 1st". The backend stores it and rewrites this
  * agent's settings file, so the reminder becomes its own Maritime cron on the next schedule sync.
  */
+/** "Renew my books on vpl.ca": made ready on the Tasks page. Nothing runs until the person taps Start. */
+async function proposeWebTaskFromChat(
+  r: ChatReply,
+  personText: string,
+  studentId: string,
+  requestId: string,
+  deps: HandlerDeps,
+): Promise<{ ok: boolean; reply: string }> {
+  const parsed = ChatWebsite.safeParse(r.website);
+  if (!parsed.success) return { ok: false, reply: 'Which website should I do that on?' };
+  if (!siteNamedByPerson(parsed.data.url, personText))
+    return { ok: false, reply: 'Which website should I do that on? Give me its address.' };
+  try {
+    const res = await deps.post('/api/agent/web-tasks', {
+      studentId,
+      requestId,
+      instruction: parsed.data.instruction,
+      url: parsed.data.url,
+    });
+    const body = (await res.json().catch(() => ({}))) as { site?: string; error?: string };
+    if (!res.ok)
+      return {
+        ok: false,
+        reply: `I couldn't set that up: ${body.error ?? 'try again in a moment.'}`,
+      };
+    return {
+      ok: true,
+      reply: `It's ready on the Tasks page. Tap Start and I'll work through ${body.site ?? 'the site'} in a private browser, and check with you before anything final.`,
+    };
+  } catch {
+    return { ok: false, reply: "I couldn't reach Helm to set that up. Try again in a moment." };
+  }
+}
+
 /** "I finished the lab report" → that exact item (by its ref) marked done. */
 async function markDoneFromChat(
   r: ChatReply,

@@ -9,6 +9,7 @@ import { tick, tickDepsFor } from '@/lib/submissions';
 import { syncAgentSettings } from '@/lib/provisioning';
 import { catchUpReminders } from '@/lib/reminders';
 import { maritimeOrNull } from '@/lib/student';
+import { advanceDueWebTasks, webTaskDepsFromEnv } from '@/lib/web-tasks';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
@@ -37,6 +38,14 @@ export async function POST(req: Request): Promise<Response> {
     after(() =>
       checkDue(r.db, deps, r.agent.userId).catch((err: unknown) =>
         console.warn('[desktop] heartbeat check failed', String(err).slice(0, 200)),
+      ),
+    );
+  // A website task keeps going even if the page that started it was closed.
+  const taskDeps = await webTaskDepsFromEnv();
+  if (taskDeps)
+    after(() =>
+      advanceDueWebTasks(r.db, taskDeps, r.agent.userId).catch((err: unknown) =>
+        console.warn('[web-task] heartbeat failed', String(err).slice(0, 200)),
       ),
     );
   return json({ ...scheduler, reminders: reminders.sent, desktop: deps ? 'checking' : null });
