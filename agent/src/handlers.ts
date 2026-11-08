@@ -87,7 +87,12 @@ const defaultDeps = (): HandlerDeps => ({
   extract: (text, ctx) => extractDeadlines(text, ctx, llmChainFromEnv()),
   post: (path, body) => postBackend(path, body),
   get: (path) => getBackend(path),
-  classify: (email, ctx) => classifyEmail(email, ctx, { ...llmFromEnv(), timeoutMs: 30_000 }),
+  classify: (email, ctx) =>
+    classifyEmail(
+      email,
+      ctx,
+      llmChainFromEnv().map((o) => ({ ...o, timeoutMs: 30_000 })),
+    ),
   word: async (draft) => {
     const p = wordingPrompt(draft);
     const r = await llmJson(

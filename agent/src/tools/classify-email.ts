@@ -8,7 +8,7 @@ import {
   utcToLocal,
   type StateAssignment,
 } from '@helm/shared';
-import { geminiJson, type GeminiOptions } from '../llm/gemini';
+import { llmJson, type GeminiOptions } from '../llm/gemini';
 
 const MAX_CHARS = 20_000;
 /** A match the code can't confirm from the email's words is capped here, so it needs the student. */
@@ -93,11 +93,11 @@ Rules:
 export async function classifyEmail(
   email: InboundEmail,
   ctx: ClassifyContext,
-  llm: GeminiOptions,
+  llm: GeminiOptions | GeminiOptions[],
 ): Promise<ClassifyOutput> {
   const body = email.body.length > MAX_CHARS ? email.body.slice(0, MAX_CHARS) : email.body;
   const strip = (s: string) => s.replaceAll('</email>', '');
-  const { data, model } = await geminiJson(llm, {
+  const { data, model } = await llmJson(Array.isArray(llm) ? llm : [llm], {
     system: systemPrompt(email, ctx),
     user: `<email>\nChannel: ${email.source ?? 'email'}\nFrom: ${strip(email.from)}\nSubject: ${strip(email.subject)}\nDate: ${email.receivedAt}\n\n${strip(body)}\n</email>`,
     schemaName: 'email_change',
