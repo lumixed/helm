@@ -22,6 +22,7 @@ export const AGENT_MESSAGE_TYPES = [
   'routine.due',
   'review.weekly',
   'followup.draft',
+  'calendar.add_blocks',
 ] as const;
 
 export const AgentMessageType = z.enum(AGENT_MESSAGE_TYPES);
@@ -159,7 +160,31 @@ export const FollowupDraftMessage = z.object({
   payload: z.object({ threadId: z.string().min(1).max(100) }),
 });
 
+/**
+ * "Add to Google Calendar": the person tapped it for today's work blocks. The agent writes them
+ * with its own Google key; each block gets a fixed event id, so tapping twice adds nothing twice.
+ */
+export const CalendarAddBlocksMessage = z.object({
+  ...base,
+  type: z.literal('calendar.add_blocks'),
+  payload: z.object({
+    forDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+    blocks: z
+      .array(
+        z.object({
+          assignmentId: z.string().min(1).max(100),
+          title: z.string().min(1).max(200),
+          start: z.iso.datetime({ offset: true }),
+          end: z.iso.datetime({ offset: true }),
+        }),
+      )
+      .min(1)
+      .max(12),
+  }),
+});
+
 export const AgentMessage = z.discriminatedUnion('type', [
+  CalendarAddBlocksMessage,
   FollowupDraftMessage,
   RoutineDueMessage,
   ReminderDueMessage,

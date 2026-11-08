@@ -1,6 +1,12 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { AgentRuntimeConfig, type ReminderSchedule, type Routines } from '@helm/shared';
+import {
+  AgentRuntimeConfig,
+  DEFAULT_WORK_HOURS,
+  type ReminderSchedule,
+  type Routines,
+  type WorkHours,
+} from '@helm/shared';
 
 /** Everything outside /data is disposable on Maritime (PRD section 7, "Memory"). */
 export const DATA_DIR =
@@ -38,6 +44,8 @@ export interface Runtime {
   reminders: ReminderSchedule[];
   /** Evening check-in / weekly review (settings file only); each is its own Maritime cron. */
   routines: Routines;
+  /** Work window and days off for time-blocking (settings file only). */
+  workHours: WorkHours;
   /** Where the values came from, for the status endpoint. */
   source: 'env+file' | 'file' | 'env' | 'none';
   error?: string;
@@ -74,6 +82,7 @@ export function runtime(file = paths.runtimeConfig): Runtime {
         demoMode: f.demoMode ?? fromEnv.demoMode,
         reminders: f.reminders ?? [],
         routines: f.routines ?? {},
+        workHours: f.workHours ?? DEFAULT_WORK_HOURS,
         source: fromEnv.studentId ? 'env+file' : 'file',
       };
     } else {
@@ -102,6 +111,7 @@ function envRuntime(): Runtime {
     demoMode: e.DEMO_MODE === 'true',
     reminders: [],
     routines: {},
+    workHours: DEFAULT_WORK_HOURS,
     source: studentId ? 'env' : 'none',
   };
 }

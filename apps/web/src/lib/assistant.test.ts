@@ -59,6 +59,22 @@ describe('routines in the agent settings file', () => {
   });
 });
 
+describe('work hours in the agent settings file', () => {
+  it('are included only when set', async () => {
+    expect(JSON.parse(agentSettings(maya)).workHours).toBeUndefined();
+    const [u] = (await db
+      .update(schema.users)
+      .set({ workHoursJson: { start: '10:00', end: '18:00', offDays: [0, 6] } })
+      .where(eq(schema.users.id, maya.id))
+      .returning()) as [User];
+    expect(JSON.parse(agentSettings(u)).workHours).toEqual({
+      start: '10:00',
+      end: '18:00',
+      offDays: [0, 6],
+    });
+  });
+});
+
 describe('two-way Telegram', () => {
   it('passes a linked chat’s message to the person’s agent and replies with its answer', async () => {
     process.env.TELEGRAM_BOT_TOKEN = '123:test';

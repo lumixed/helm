@@ -10,11 +10,14 @@ export function BriefCard({
   initial,
   briefTime,
   doneIds = [],
+  googleConnected = false,
 }: {
   initial: TodaysBrief | null;
   briefTime: string;
   /** Focus items already marked done or handed in. */
   doneIds?: string[];
+  /** Google is connected, so work blocks can be added to the calendar. */
+  googleConnected?: boolean;
 }) {
   const [brief, setBrief] = useState(initial);
   const [waitingSince, setWaitingSince] = useState<number | null>(null);
@@ -129,6 +132,7 @@ export function BriefCard({
                 <p className="mt-1 text-xs text-muted">
                   Bold is focused work Helm fitted around your calendar.
                 </p>
+                {googleConnected && brief.blocks.length > 0 && <AddToCalendar />}
               </div>
             )}
             {brief.changes.length > 0 && (
@@ -173,5 +177,56 @@ export function BriefCard({
         Send my brief now
       </Button>
     </Card>
+  );
+}
+
+/** One tap: the agent writes today's work blocks to Google Calendar. Tapping again adds nothing twice. */
+function AddToCalendar() {
+  const [requestId, setRequestId] = useState<string | null>(null);
+  const [note, setNote] = useState<{ ok: boolean; text: string } | null>(null);
+
+  useEffect(() => {
+    if (!requestId) return;
+    const started = Date.now();
+    const t = setInterval(async () => {
+      const res = await fetch(`/api/brief/calendar?requestId=${encodeURIComponent(requestId)}`, {
+        cache: 'no-store',
+      });
+      const r = (await res.json().catch(() => ({}))) as {
+        done?: boolean;
+        ok?: boolean;
+        message?: string;
+      };
+      if (r.done) {
+        setRequestId(null);
+        setNote({ ok: Boolean(r.ok), text: `${r.message ?? 'Done'}.`.replace(/\.\.$/, '.') });
+      } else if (Date.now() - started > 90_000) {
+        setRequestId(null);
+        setNote({ ok: false, text: 'Your agent has not answered yet. Check the timeline.' });
+      }
+    }, 2000);
+    return () => clearInterval(t);
+  }, [requestId]);
+
+  async function add() {
+    setNote(null);
+    const res = await fetch('/api/brief/calendar', { method: 'POST' });
+    const r = (await res.json().catch(() => ({}))) as { requestId?: string; error?: string };
+    if (!res.ok || !r.requestId) {
+      setNote({ ok: false, text: r.error ?? 'Could not reach your agent.' });
+      return;
+    }
+    setRequestId(r.requestId);
+  }
+
+  return (
+    <div className="mt-2 flex flex-col gap-1">
+      <Button variant="secondary" className="w-fit" disabled={requestId !== null} onClick={add}>
+        {requestId ? 'Adding to Google Calendar…' : 'Add blocks to Google Calendar'}
+      </Button>
+      <p aria-live="polite" className={`text-sm ${note && !note.ok ? 'text-danger' : ''}`}>
+        {note?.text}
+      </p>
+    </div>
   );
 }

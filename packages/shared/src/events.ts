@@ -42,6 +42,7 @@ export const AGENT_EVENT_TYPES = [
   'review.written',
   'followup.found',
   'followup.drafted',
+  'calendar.blocks_added',
 ] as const;
 
 export const AgentEventType = z.enum(AGENT_EVENT_TYPES);

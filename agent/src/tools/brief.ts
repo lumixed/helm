@@ -1,6 +1,9 @@
 import {
   formatDuration,
   planDay,
+  isDayOff,
+  DEFAULT_WORK_HOURS,
+  type WorkHours,
   rankAssignments,
   utcToLocal,
   type AgentState,
@@ -43,15 +46,18 @@ export async function buildBrief(
   word?: WordFn,
   notes: string[] = [],
   schedule: ScheduleItem[] = [],
+  workHours: WorkHours = DEFAULT_WORK_HOURS,
 ): Promise<BriefContent> {
   const ranked = rankAssignments(state.assignments, now);
+  const dayOff = isDayOff(now, state.timezone, workHours);
   const toItem = (r: Ranked<StateAssignment>): BriefItem => ({
     assignmentId: r.item.id,
     courseCode: r.item.courseCode,
     title: r.item.title,
     dueAt: r.item.dueAt!,
     why: r.why,
-    minutes: Math.min(r.remainingMinutes, MAX_MINUTES_PER_ITEM),
+    // On a day off, items are still listed but no time is suggested for them.
+    minutes: dayOff ? 0 : Math.min(r.remainingMinutes, MAX_MINUTES_PER_ITEM),
     overdue: r.overdue,
   });
   const focus = ranked.slice(0, 3).map(toItem);
@@ -60,8 +66,9 @@ export async function buildBrief(
     .filter((r) => r.hoursLeft <= 72)
     .map(toItem);
   const planned = focus.reduce((m, i) => m + i.minutes, 0);
-  const capacity =
-    planned > 0
+  const capacity = dayOff
+    ? 'Today is a day off, so no work is scheduled.'
+    : planned > 0
       ? `About ${formatDuration(planned)} of focused work planned today.`
       : 'Nothing needs work today.';
   // Money: bills due in the next 7 days (or overdue) with a known amount, totalled by code.
@@ -84,12 +91,15 @@ export async function buildBrief(
   // Items more than a day overdue are listed, not scheduled: they were probably handled already
   // (mark them done) or can't be worked on any more (a missed exam).
   const plannable = focus.filter((f) => new Date(f.dueAt).getTime() > now.getTime() - 86_400_000);
-  const plan = planDay(
-    plannable.map((f) => ({ id: f.assignmentId, title: f.title, minutes: f.minutes })),
-    schedule,
-    now,
-    state.timezone,
-  );
+  const plan = dayOff
+    ? { blocks: [], unplannedMinutes: 0 }
+    : planDay(
+        plannable.map((f) => ({ id: f.assignmentId, title: f.title, minutes: f.minutes })),
+        schedule,
+        now,
+        state.timezone,
+        { start: workHours.start, end: workHours.end },
+      );
   const at = (iso: string) =>
     new Intl.DateTimeFormat('en-CA', {
       timeZone: state.timezone,

@@ -2,6 +2,8 @@ import { AgentStatus } from '@/components/AgentStatus';
 import { GmailCard } from '@/components/GmailCard';
 import { CalendarCard } from '@/components/CalendarCard';
 import { RoutinesCard } from '@/components/RoutinesCard';
+import { WorkHoursCard } from '@/components/WorkHoursCard';
+import { ScrollToHash } from '@/components/ScrollToHash';
 import { formatWhen } from '@/lib/format';
 import { MessagingAppsCard } from '@/components/MessagingAppsCard';
 import { computersFromEnv } from '@/lib/computers';
@@ -57,22 +59,38 @@ export default async function SetupPage({
 
       {user.onboarded && (
         <section aria-labelledby="connections-h" className="flex flex-col gap-3">
+          <ScrollToHash />
           <h2 id="connections-h" className="pt-2 text-[17px] font-semibold tracking-tight text-ink">
             Connections
           </h2>
-          <RoutinesCard initial={full.routinesJson ?? {}} />
-          <CalendarCard
-            host={full.calendarHost}
-            syncedLabel={
-              full.calendarSyncedAt ? formatWhen(full.calendarSyncedAt, full.timezone) : null
-            }
-            demo={process.env.DEMO_MODE === 'true'}
-          />
-          {gmailConfig() && <GmailCard address={full.gmailAddress} result={gmail} />}
+          <div id="routines" className="scroll-mt-20">
+            <RoutinesCard initial={full.routinesJson ?? {}} />
+          </div>
+          <div id="work-hours" className="scroll-mt-20">
+            <WorkHoursCard initial={full.workHoursJson ?? null} />
+          </div>
+          <div id="calendar" className="scroll-mt-20">
+            <CalendarCard
+              host={full.calendarHost}
+              syncedLabel={
+                full.calendarSyncedAt ? formatWhen(full.calendarSyncedAt, full.timezone) : null
+              }
+              demo={process.env.DEMO_MODE === 'true'}
+            />
+          </div>
+          {gmailConfig() && (
+            <div id="google" className="scroll-mt-20">
+              <GmailCard address={full.gmailAddress} result={gmail} />
+            </div>
+          )}
           {computersFromEnv() && process.env.GEMINI_API_KEY && (
             <MessagingAppsCard initial={await listApps(await getDb(), full)} />
           )}
-          {telegramToken() && <TelegramCard linked={user.telegramLinked} />}
+          {telegramToken() && (
+            <div id="telegram" className="scroll-mt-20">
+              <TelegramCard linked={user.telegramLinked} />
+            </div>
+          )}
           {!inApp && (
             <Card>
               <details>

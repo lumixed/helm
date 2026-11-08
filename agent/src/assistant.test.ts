@@ -30,6 +30,7 @@ async function setup(opts: {
   reply?: ChatReply;
   gmail?: boolean;
   config?: Record<string, unknown>;
+  calendarDenied?: boolean;
 }) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'helm-asst-'));
   fs.mkdirSync(path.join(dir, 'helm'), { recursive: true });
@@ -43,9 +44,12 @@ async function setup(opts: {
   const { createApp, buildSchedules } = await import('./server');
   const { Emitter } = await import('./emit');
   const { Dedupe } = await import('./dedupe');
+  // After resetModules, so `instanceof` in the handlers sees this same class.
+  const { GmailError } = await import('./tools/gmail');
   const events: { type: string; reason: string }[] = [];
   const posted: { path: string; body: Record<string, unknown> }[] = [];
   const drafts: unknown[] = [];
+  const calendarWrites: { title: string }[][] = [];
   const app = createApp({
     emitter: new Emitter({
       target: () => ({ backendUrl: 'https://helm.test', token: 't', studentId: 's1' }),
@@ -82,6 +86,11 @@ async function setup(opts: {
                 return { id: 'd1' };
               },
               events: async () => [],
+              addBlocks: async (blocks) => {
+                if (opts.calendarDenied) throw new GmailError('auth');
+                calendarWrites.push(blocks);
+                return { added: blocks.length, existing: 0 };
+              },
             }
           : null,
     },
@@ -96,7 +105,7 @@ async function setup(opts: {
         })
       ).json()) as { response: string }
     ).response;
-  return { app, say, events, posted, drafts, buildSchedules };
+  return { app, say, events, posted, drafts, calendarWrites, buildSchedules };
 }
 
 describe('tell it to do things', () => {
@@ -225,5 +234,58 @@ describe('routines on Maritime cron', () => {
       text: expect.stringMatching(/Due tomorrow: DATA 210 · Lab report/),
     });
     expect(events.find((e) => e.type === 'routine.sent')?.reason).toMatch(/sent to your phone/);
+  });
+});
+
+describe('adding work blocks to Google Calendar', () => {
+  const block = (start: string, end: string) => ({
+    assignmentId: 'a1',
+    title: 'Lab report',
+    start,
+    end,
+  });
+  const send = (
+    app: Awaited<ReturnType<typeof setup>>['app'],
+    blocks: ReturnType<typeof block>[],
+  ) =>
+    app.request('/chat', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        source: 'front_door',
+        message: encodeAgentMessage({
+          v: 1,
+          type: 'calendar.add_blocks',
+          requestId: 'calendar:blocks:1',
+          studentId: 's1',
+          payload: { forDate: '2026-11-09', blocks },
+        }),
+      }),
+    });
+  // The test clock is 2026-11-10T05:00Z.
+  const past = block('2026-11-10T03:00:00.000Z', '2026-11-10T04:00:00.000Z');
+  const ahead = block('2026-11-10T06:00:00.000Z', '2026-11-10T07:00:00.000Z');
+
+  it('writes only blocks still ahead and reports it', async () => {
+    const { app, calendarWrites, events } = await setup({ gmail: true });
+    await send(app, [past, ahead]);
+    expect(calendarWrites).toEqual([[ahead]]);
+    expect(events.find((e) => e.type === 'calendar.blocks_added')?.reason).toBe(
+      'Added 1 work block to your Google Calendar',
+    );
+  });
+
+  it('says to reconnect when Google has not allowed calendar writes', async () => {
+    const { app, events } = await setup({ gmail: true, calendarDenied: true });
+    await send(app, [ahead]);
+    expect(events.find((e) => e.type === 'agent.error')?.reason).toMatch(/Connect Google again/);
+    expect(events.find((e) => e.type === 'calendar.blocks_added')).toBeUndefined();
+  });
+
+  it('writes nothing without Google connected', async () => {
+    const { app, calendarWrites, events } = await setup({ gmail: false });
+    await send(app, [ahead]);
+    expect(calendarWrites).toHaveLength(0);
+    expect(events.find((e) => e.type === 'agent.error')?.reason).toMatch(/Connect Google/);
   });
 });

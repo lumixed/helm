@@ -67,6 +67,25 @@ describe('buildBrief', () => {
     expect(fail.summary).toMatch(/^Good morning, Maya\. Start with DATA 210 x\./);
   });
 
+  it('plans inside work hours and nothing on a day off', async () => {
+    const st = state([a('soon', 20, 30)]);
+    // 2026-11-09 is a Monday.
+    const late = await buildBrief(st, now, 'cron', undefined, [], [], {
+      start: '14:00',
+      end: '18:00',
+      offDays: [],
+    });
+    expect(late.capacity).toMatch(/first at 2:00 p\.m\.$/);
+    const off = await buildBrief(st, now, 'cron', undefined, [], [], {
+      start: '09:00',
+      end: '17:00',
+      offDays: [1],
+    });
+    expect(off.blocks).toEqual([]);
+    expect(off.capacity).toBe('Today is a day off, so no work is scheduled.');
+    expect(off.focus[0]).toMatchObject({ title: 'soon', minutes: 0 }); // listed, no time suggested
+  });
+
   it('says so honestly when nothing is urgent', async () => {
     const b = await buildBrief(state([]), now, 'cron', async () => ({
       summary: 'should not be used',

@@ -72,3 +72,27 @@ describe('normalizeMoney', () => {
     expect(normalizeMoney(10, 'dollars')).toEqual({ amount: 10, currency: null });
   });
 });
+
+import { isDayOff, WorkHours } from './plan';
+describe('work hours', () => {
+  it('plans only inside the person’s window', () => {
+    const { blocks } = planDay(
+      [{ id: 'a', title: 'Report', minutes: 60 }],
+      [],
+      new Date(at('2026-11-10T07:30')),
+      tz,
+      { start: '13:00', end: '17:00' },
+    );
+    expect(local(blocks[0]!.start)).toBe('13:00');
+  });
+  it('knows a day off in the person’s timezone', () => {
+    // 2026-11-14 23:30 in Vancouver is Saturday, already Sunday in UTC.
+    const sat = new Date(at('2026-11-14T23:30'));
+    expect(isDayOff(sat, tz, { start: '09:00', end: '17:00', offDays: [6] })).toBe(true);
+    expect(isDayOff(sat, tz, { start: '09:00', end: '17:00', offDays: [0] })).toBe(false);
+  });
+  it('rejects an end before the start', () => {
+    expect(WorkHours.safeParse({ start: '18:00', end: '09:00' }).success).toBe(false);
+    expect(WorkHours.parse({ start: '09:00', end: '17:00' }).offDays).toEqual([]);
+  });
+});

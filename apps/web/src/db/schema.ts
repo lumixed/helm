@@ -85,6 +85,14 @@ export const users = pgTable(
       .$type<{ evening?: string; weekly?: { weekday: number; time: string } }>()
       .notNull()
       .default({}),
+    /** Work window and days off for time-blocking (null = 9:00 to 21:00, every day). */
+    workHoursJson: jsonb('work_hours_json').$type<{
+      start: string;
+      end: string;
+      offDays: number[];
+    }>(),
+    /** The person closed the "Get Helm ready" checklist on Today. */
+    setupDismissedAt: timestamp('setup_dismissed_at', { withTimezone: true }),
     onboardedAt: timestamp('onboarded_at', { withTimezone: true }),
     createdAt: createdAt(),
   },

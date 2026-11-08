@@ -10,7 +10,7 @@ const RESULT: Record<string, { text: string; bad?: boolean }> = {
   error: { text: 'Could not connect Gmail. Try again.', bad: true },
 };
 
-/** Real Gmail, read-only. The token lives only in the user's agent, never on Helm's servers. */
+/** Real Gmail and Google Calendar. The token lives only in the user's agent, never on Helm's servers. */
 export function GmailCard({ address, result }: { address: string | null; result?: string }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
@@ -28,8 +28,10 @@ export function GmailCard({ address, result }: { address: string | null; result?
         <>
           <p className="mt-1">
             Reading <strong>{address}</strong> (read-only for reading). Your agent checks it every
-            15 minutes and saves email drafts only when you ask in chat. The access key lives only
-            in your private agent, not on Helm&apos;s servers, and emails never leave it.
+            15 minutes and saves email drafts only when you ask in chat. It adds work blocks to your
+            calendar only when you tap for it (if that button says Google didn&apos;t allow it,
+            connect again). The access key lives only in your private agent, not on Helm&apos;s
+            servers, and emails never leave it.
           </p>
           <div className="mt-3 flex flex-wrap gap-2">
             <Button
@@ -65,10 +67,11 @@ export function GmailCard({ address, result }: { address: string | null; result?
       ) : (
         <>
           <p className="mt-1">
-            Let your agent read your Gmail and today’s calendar (read-only) to catch deadlines,
-            bills and appointments, and save email drafts you ask for. Google&apos;s permission
-            screen says &ldquo;send&rdquo; because drafts and sending share one permission; Helm
-            only ever saves drafts, and never sends or deletes anything.
+            Let your agent read your Gmail and today’s calendar to catch deadlines, bills and
+            appointments, save email drafts you ask for, and add work blocks to your calendar when
+            you tap for it. Google&apos;s permission screen says &ldquo;send&rdquo; because drafts
+            and sending share one permission; Helm only ever saves drafts, and never sends or
+            deletes anything.
           </p>
           <a
             href="/api/gmail/connect"

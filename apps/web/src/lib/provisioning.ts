@@ -232,6 +232,8 @@ export function agentSettings(
     ...(user.routinesJson && (user.routinesJson.evening || user.routinesJson.weekly)
       ? { routines: user.routinesJson }
       : {}),
+    // Work window and days off: the agent time-blocks only inside them.
+    ...(user.workHoursJson ? { workHours: user.workHoursJson } : {}),
   };
   return JSON.stringify(AgentRuntimeConfig.parse(settings), null, 2);
 }

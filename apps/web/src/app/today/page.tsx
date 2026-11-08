@@ -21,6 +21,10 @@ import { reminderViews } from '@/lib/reminders';
 import { latestWeeklyReview } from '@/lib/week';
 import { openWaiting } from '@/lib/waiting';
 import { WaitingCard } from '@/components/WaitingCard';
+import { GetStartedCard } from '@/components/GetStartedCard';
+import { gmailConfig } from '@/lib/gmail';
+import { setupSteps } from '@/lib/setup-steps';
+import { telegramToken } from '@/lib/telegram';
 
 export const dynamic = 'force-dynamic';
 
@@ -72,6 +76,12 @@ export default async function TodayPage({
     day: 'numeric',
   }).format(now);
 
+  const steps = setupSteps(fullUser, {
+    hasItems: confirmed.length + pending.length > 0,
+    google: Boolean(gmailConfig()),
+    telegram: Boolean(telegramToken()),
+  });
+
   return (
     <Shell title={user.name ? `Today, ${user.name}` : 'Today'} subtitle={dateLabel}>
       {paused && (
@@ -84,7 +94,7 @@ export default async function TodayPage({
       {gmail && (
         <Banner tone={gmail === 'connected' || gmail === 'ok' ? 'ok' : 'warn'} role="status">
           {gmail === 'connected' || gmail === 'ok'
-            ? 'Gmail is connected. Your agent will read new mail (read-only).'
+            ? 'Gmail is connected. Your agent will read new mail.'
             : 'Gmail was not connected. You can try again in Settings.'}
         </Banner>
       )}
@@ -104,11 +114,14 @@ export default async function TodayPage({
         </Link>
       )}
 
+      {!fullUser.setupDismissedAt && steps.some((s) => !s.done) && <GetStartedCard steps={steps} />}
+
       <SubmissionAlerts initial={submissions} />
       <ChangesCard pending={changes.pending} applied={changes.applied} assignments={pickable} />
       <BriefCard
         initial={brief}
         briefTime={user.briefTimeLocal}
+        googleConnected={Boolean(fullUser.gmailAddress)}
         doneIds={confirmed
           .filter((a) => a.status === 'done' || a.status === 'submitted')
           .map((a) => a.id)}

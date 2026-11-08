@@ -14,6 +14,24 @@ export const WorkBlock = z.object({
 });
 export type WorkBlock = z.infer<typeof WorkBlock>;
 
+const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/;
+/** When the person wants work planned: a daily window and days off (0 = Sunday). */
+export const WorkHours = z
+  .object({
+    start: z.string().regex(HHMM),
+    end: z.string().regex(HHMM),
+    offDays: z.array(z.number().int().min(0).max(6)).max(7).default([]),
+  })
+  .refine((w) => w.start < w.end, 'The end must be after the start');
+export type WorkHours = z.infer<typeof WorkHours>;
+export const DEFAULT_WORK_HOURS: WorkHours = { start: '09:00', end: '21:00', offDays: [] };
+
+/** True when `now` falls on one of the person's days off (in their timezone). */
+export function isDayOff(now: Date, tz: string, hours: WorkHours): boolean {
+  const wd = new Intl.DateTimeFormat('en-US', { timeZone: tz, weekday: 'short' }).format(now);
+  return hours.offDays.includes(['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].indexOf(wd));
+}
+
 export interface PlanItem {
   id: string;
   title: string;

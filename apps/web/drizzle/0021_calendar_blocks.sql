@@ -1,0 +1,1 @@
+ALTER TYPE "public"."agent_event_type" ADD VALUE 'calendar.blocks_added';

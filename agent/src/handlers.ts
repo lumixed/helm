@@ -42,7 +42,7 @@ import {
 } from './tools/classify-email';
 import { DocumentError, readDocumentText, resolveInside } from './tools/read-document';
 import { SandboxUnavailable, parseInSandbox } from './tools/sandbox-parse';
-import { listEvents } from './tools/gcal';
+import { addBlocks, listEvents, type BlockEvent } from './tools/gcal';
 import {
   ChatDraft,
   ChatMemory,
@@ -160,6 +160,8 @@ export interface GmailReader {
   thread(threadId: string): Promise<ThreadMessage[]>;
   /** Google Calendar events between two instants (read-only). Absent = no calendar. */
   events?(timeMin: string, timeMax: string): Promise<ScheduleItem[]>;
+  /** Write work blocks to Google Calendar (only when the person taps for it). */
+  addBlocks?(blocks: BlockEvent[]): Promise<{ added: number; existing: number }>;
 }
 
 function gmailReader(c: GmailCreds): GmailReader {
@@ -172,6 +174,7 @@ function gmailReader(c: GmailCreds): GmailReader {
     listSent: async (a, b) => listSent(await t(), a, b),
     thread: async (id) => threadMessages(await t(), id),
     events: async (min, max) => listEvents(await t(), min, max),
+    addBlocks: async (blocks) => addBlocks(await t(), blocks, runtime().backendUrl || null),
   };
 }
 
@@ -329,6 +332,7 @@ const WAKE_REASONS: Record<AgentMessage['type'], string> = {
   'reminder.due': 'Woke for your reminder',
   'review.weekly': 'Woke to write your weekly review',
   'followup.draft': 'Woke to draft a follow-up email',
+  'calendar.add_blocks': 'Woke to add your work blocks to Google Calendar',
 };
 
 /**
@@ -417,6 +421,10 @@ export async function handleMessage(msg: AgentMessage, ctx: HandlerContext): Pro
     }
     case 'followup.draft': {
       reply = await handleFollowupDraft(msg.payload.threadId, requestId, woke, ctx);
+      break;
+    }
+    case 'calendar.add_blocks': {
+      reply = await handleAddBlocks(msg.payload.blocks, requestId, woke, ctx);
       break;
     }
     case 'heartbeat': {
@@ -804,7 +812,15 @@ async function handleBrief(
       .events(from.toISOString(), new Date(from.getTime() + 86_400_000).toISOString())
       .catch(() => []);
   }
-  const brief = await buildBrief(state, deps.now(), trigger, deps.word, notes, schedule);
+  const brief = await buildBrief(
+    state,
+    deps.now(),
+    trigger,
+    deps.word,
+    notes,
+    schedule,
+    runtime().workHours,
+  );
   const body: BriefRequest = { studentId: state.studentId, requestId, brief };
   try {
     const res = await deps.post('/api/agent/brief', body);
@@ -1881,4 +1897,62 @@ async function handleFollowupDraft(
     }),
   );
   return 'followup: draft saved';
+}
+
+/**
+ * "Add to Google Calendar" for today's work blocks. Only blocks still ahead are written; the
+ * person asked for this with one tap, and Helm writes nothing to the calendar otherwise.
+ */
+async function handleAddBlocks(
+  blocks: BlockEvent[],
+  requestId: string,
+  woke: ReturnType<Emitter['event']>,
+  ctx: HandlerContext,
+): Promise<string> {
+  const deps = { ...defaultDeps(), ...ctx.deps };
+  const fail = async (reason: string, code: string) => {
+    await ctx.emitter.emit(
+      woke,
+      ctx.emitter.event({
+        eventId: `${requestId}:error`,
+        requestId,
+        type: 'agent.error',
+        reason,
+        payload: { stage: 'calendar.add_blocks', code },
+      }),
+    );
+    return reason;
+  };
+  const gmail = deps.gmail();
+  if (!gmail?.addBlocks)
+    return fail('Connect Google in Settings to add blocks to your calendar.', 'not_connected');
+  const now = deps.now().getTime();
+  const ahead = blocks.filter((b) => new Date(b.end).getTime() > now && b.end > b.start);
+  if (!ahead.length) return fail('Those blocks are already over.', 'past');
+  let r: { added: number; existing: number };
+  try {
+    r = await gmail.addBlocks(ahead);
+  } catch (err) {
+    return err instanceof GmailError && err.kind !== 'api'
+      ? fail(
+          'Google did not allow adding events. Connect Google again in Settings and allow calendar access.',
+          'scope',
+        )
+      : fail("Couldn't reach Google Calendar. Try again in a moment.", 'api');
+  }
+  const reason =
+    r.added === 0
+      ? 'Your work blocks were already in Google Calendar'
+      : `Added ${r.added} work block${r.added === 1 ? '' : 's'} to your Google Calendar${r.existing ? ` (${r.existing} already there)` : ''}`;
+  await ctx.emitter.emit(
+    woke,
+    ctx.emitter.event({
+      eventId: `${requestId}:added`,
+      requestId,
+      type: 'calendar.blocks_added',
+      reason,
+      payload: { added: r.added, existing: r.existing, skippedPast: blocks.length - ahead.length },
+    }),
+  );
+  return `calendar: ${reason}`;
 }

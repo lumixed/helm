@@ -141,6 +141,27 @@
       "when": 1794122280499,
       "tag": "0019_bill_amounts",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1794123543594,
+      "tag": "0020_work_hours",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1794123775257,
+      "tag": "0021_calendar_blocks",
+      "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1794132298226,
+      "tag": "0022_setup_dismissed",
+      "breakpoints": true
     }
   ]
 }
