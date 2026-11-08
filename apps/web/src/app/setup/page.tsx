@@ -3,7 +3,10 @@ import { GmailCard } from '@/components/GmailCard';
 import { MessagingAppsCard } from '@/components/MessagingAppsCard';
 import { computersFromEnv } from '@/lib/computers';
 import { listApps } from '@/lib/desktop';
-import { getDb } from '@/db';
+import { eq } from 'drizzle-orm';
+import { LimitsCard } from '@/components/LimitsCard';
+import { getDb, schema } from '@/db';
+import { policySummary } from '@/lib/limits';
 import { SetupForm } from '@/components/SetupForm';
 import { SignOutButton } from '@/components/SignOutButton';
 import { TelegramCard } from '@/components/TelegramCard';
@@ -23,6 +26,13 @@ export default async function SetupPage({
   const { gmail } = await searchParams;
   const { user, agent } = await requireProfile();
   const full = (await currentUser())!;
+  const [agentRow] = await (
+    await getDb()
+  )
+    .select()
+    .from(schema.agents)
+    .where(eq(schema.agents.userId, full.id));
+  const limits = user.onboarded ? await policySummary(full, agentRow ?? null) : null;
   return (
     <Shell
       title={user.onboarded ? 'Settings' : 'Set up Helm'}
@@ -65,6 +75,7 @@ export default async function SetupPage({
       )}
 
       <AgentStatus initial={agent} />
+      {limits && <LimitsCard p={limits} />}
       {user.onboarded && (
         <a
           href="/maritime"
