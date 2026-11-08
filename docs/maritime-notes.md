@@ -139,7 +139,7 @@ Helm uses this to give agents created before M7 their demo-portal login (`PORTAL
 
 ## Releases
 
-`helm-image-v0-5`, `v0-6` (egress allowlist work), `v0-7` (M6 email change detection, image `…1d2045ae04af`, both student agents moved on 2026-11-07 16:34 PT, `/data` kept).
+`helm-image-v0-5`, `v0-6` (egress allowlist work), `v0-7` (M6 email change detection, image `…1d2045ae04af`, both student agents moved on 2026-11-07 16:34 PT, `/data` kept). `v0-9` (built by the team at 17:46 PT: Gmail, Maritime LLM chain). `v0-10` (2026-11-07 ~19:15 PT, image `…f1784589965d`): Maritime LLM opt-in fix, classifier catches meetings without a day, channel wording; all three student agents moved, `/data` kept. With `MARITIME_AGENT_IMAGE=auto`, new sign-ups start on the newest `helm-image-*`.
 
 ## Submission scheduling (M7)
 
