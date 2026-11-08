@@ -34,7 +34,10 @@ export default async function SubmissionsPage() {
       allowed: a.allowedFileTypes,
     }));
   return (
-    <Shell title="Hand in">
+    <Shell
+      title="Hand in"
+      subtitle="Helm hands in your finished work on time, with your OK, and keeps the receipt."
+    >
       <SubmissionsBoard
         initial={submissions}
         assignments={options}

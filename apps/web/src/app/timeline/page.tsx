@@ -8,8 +8,10 @@ export const dynamic = 'force-dynamic';
 export default async function TimelinePage() {
   await requireProfile();
   return (
-    <Shell title="Agent timeline">
-      <p>Everything your private agent did, when, and why.</p>
+    <Shell
+      title="Agent timeline"
+      subtitle="Everything your private agent did, when, and why, including what Maritime reports."
+    >
       {process.env.DEMO_MODE === 'true' && <RedteamButton />}
       <Timeline />
     </Shell>
