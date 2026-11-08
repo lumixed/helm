@@ -219,7 +219,7 @@ export async function buildScorecard(
   rows.push({
     id: 'data',
     feature: 'Persistent /data disk',
-    how: 'Memory, the event queue, settings and uploaded documents live on the agent’s own disk and survive sleep.',
+    how: 'Memory (including what the person asked it to remember, which Helm’s servers never receive), the event queue, settings and uploaded documents live on the agent’s own disk and survive sleep.',
     status: files.ok ? 'active' : mid ? 'unknown' : 'not_active',
     evidence: files.ok
       ? [

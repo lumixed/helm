@@ -19,6 +19,8 @@ const SUGGESTIONS = [
   'What should I do first today?',
   "I'm sick today. What can wait?",
   'Remind me to pay rent on the 1st',
+  "Remember that I don't work on Sundays",
+  'What do you remember about me?',
   'Send me my brief',
 ];
 const CONVERSATION = 'app';

@@ -47,6 +47,7 @@ import {
   type ChatReply,
   type ChatTurn,
 } from './tools/chat';
+import { FactMemory, type Fact } from './tools/facts';
 
 export interface DocumentRead {
   text: string;
@@ -108,6 +109,7 @@ export interface HandlerDeps {
     state: AgentState,
     history: ChatTurn[],
     now: Date,
+    facts?: Fact[],
   ) => Promise<ChatReply & { model: string }>;
   /** Fetch a calendar feed's text (bounded). */
   fetchFeed: (url: string) => Promise<string>;
@@ -185,7 +187,7 @@ const defaultDeps = (): HandlerDeps => ({
     );
     return { summary: r.data.summary, writer: r.model };
   },
-  chat: (text, state, history, now) =>
+  chat: (text, state, history, now, facts = []) =>
     chatReply(
       text,
       state,
@@ -197,6 +199,7 @@ const defaultDeps = (): HandlerDeps => ({
           req,
         ),
       runtime().reminders,
+      facts,
     ),
   wordWeek: async (facts, name) => {
     const p = weekWordingPrompt(facts, name);
@@ -704,7 +707,8 @@ async function handleBrief(
   } catch (err) {
     return failed('Could not load your deadlines for the brief.', String(err));
   }
-  const brief = await buildBrief(state, deps.now(), trigger, deps.word);
+  const notes = (await new FactMemory(path.join(deps.dataDir, 'memory')).list()).map((f) => f.text);
+  const brief = await buildBrief(state, deps.now(), trigger, deps.word, notes);
   const body: BriefRequest = { studentId: state.studentId, requestId, brief };
   try {
     const res = await deps.post('/api/agent/brief', body);
@@ -1094,9 +1098,11 @@ export async function handleChat(
   }
   const memory = new ChatMemory(path.join(deps.dataDir, 'memory'));
   const history = await memory.load(conversationId);
+  const factMemory = new FactMemory(path.join(deps.dataDir, 'memory'));
+  const facts = await factMemory.list();
   let r: ChatReply & { model: string };
   try {
-    r = await deps.chat(text, state, history, deps.now());
+    r = await deps.chat(text, state, history, deps.now(), facts);
   } catch {
     return "Sorry, I couldn't think that through just now. Try again in a moment.";
   }
@@ -1118,6 +1124,12 @@ export async function handleChat(
     reason = set.ok
       ? 'Saved an email draft you asked for (not sent)'
       : 'Wrote an email draft in chat';
+  }
+  if (r.intent === 'memory') {
+    const set = await applyMemory(r, factMemory, facts, deps.now());
+    r = { ...r, reply: set.reply };
+    // The note itself stays off the timeline: it lives only on this agent's disk.
+    reason = set.reason;
   }
   if (r.intent === 'remind') {
     const set = await setReminderFromChat(r, state.studentId, requestId, deps);
@@ -1575,4 +1587,47 @@ export async function handleWeeklyReview(
     }),
   );
   return `Weekly review for ${facts.weekEnding} (${writer})`;
+}
+
+/** Remember / forget, on this agent's private disk only. Helm's servers never see the notes. */
+async function applyMemory(
+  r: ChatReply,
+  store: FactMemory,
+  facts: Fact[],
+  now: Date,
+): Promise<{ reply: string; reason: string }> {
+  const op = r.memory;
+  if (op?.action === 'remember' && op.text?.trim()) {
+    const f = await store.add(op.text, now);
+    return {
+      reply: `Got it, I'll remember: “${f.text}”. It's kept only on your agent's private disk, not on Helm's servers. Say “forget that” any time.`,
+      reason: 'Remembered something you told it (kept on its private disk)',
+    };
+  }
+  if (op?.action === 'forget_all') {
+    const n = await store.clear();
+    return {
+      reply: n
+        ? `Done. I've forgotten all ${n} thing${n === 1 ? '' : 's'} you told me to remember.`
+        : 'There was nothing to forget.',
+      reason: 'Forgot everything it was told to remember',
+    };
+  }
+  if (op?.action === 'forget') {
+    // With no ids, "forget that" means the most recent note.
+    const ids = op.ids?.length ? op.ids : facts.slice(-1).map((f) => f.id);
+    const gone = await store.remove(ids);
+    return {
+      reply: gone.length
+        ? `Forgotten: ${gone.map((f) => `“${f.text}”`).join(', ')}.`
+        : "I couldn't find that in what I remember. Ask “what do you remember?” to see the list.",
+      reason: gone.length
+        ? 'Forgot something it was told to remember'
+        : 'Answered a question in chat',
+    };
+  }
+  return {
+    reply: "I'm not sure what to remember. Try “remember that I don't work on Sundays”.",
+    reason: 'Answered a question in chat',
+  };
 }

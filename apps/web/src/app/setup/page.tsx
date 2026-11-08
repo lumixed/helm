@@ -90,6 +90,25 @@ export default async function SetupPage({
         </section>
       )}
 
+      {user.onboarded && (
+        <Card>
+          <CardTitle>What your agent remembers</CardTitle>
+          <p className="text-sm text-ink-soft">
+            Tell Ask things like &ldquo;remember that I don&apos;t work on Sundays&rdquo; or
+            &ldquo;I&apos;m a morning person&rdquo;. Your agent keeps them only on its own private
+            disk on Maritime, and uses them in answers and your brief. Helm&apos;s servers never
+            receive them.
+          </p>
+          <div className="mt-3 flex flex-wrap gap-x-5 gap-y-2 text-sm">
+            <a href="/chat" className="font-medium text-ink underline underline-offset-4">
+              Ask what it remembers
+            </a>
+            <span className="text-muted">
+              Say &ldquo;forget everything&rdquo; in Ask to clear it.
+            </span>
+          </div>
+        </Card>
+      )}
       <AgentStatus initial={agent} />
       {limits && <LimitsCard p={limits} />}
       {user.onboarded && (
