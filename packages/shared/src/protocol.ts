@@ -20,6 +20,7 @@ export const AGENT_MESSAGE_TYPES = [
   'calendar.sync',
   'reminder.due',
   'routine.due',
+  'review.weekly',
 ] as const;
 
 export const AgentMessageType = z.enum(AGENT_MESSAGE_TYPES);
@@ -141,9 +142,19 @@ export const RoutineDueMessage = z.object({
   payload: z.object({ routine: z.enum(['evening', 'weekly']) }),
 });
 
+/** Write the weekly review now ("Write it now"). The scheduled one comes as routine.due weekly. */
+export const ReviewWeeklyMessage = z.object({
+  ...base,
+  type: z.literal('review.weekly'),
+  payload: z
+    .object({ trigger: z.enum(['cron', 'manual']).default('cron') })
+    .default({ trigger: 'cron' }),
+});
+
 export const AgentMessage = z.discriminatedUnion('type', [
   RoutineDueMessage,
   ReminderDueMessage,
+  ReviewWeeklyMessage,
   CalendarSyncMessage,
   GmailSyncMessage,
   RedteamEgressMessage,

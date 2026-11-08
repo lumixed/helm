@@ -55,7 +55,7 @@ function look(
   if (type.endsWith('sleeping')) return { Icon: IconMoon, tone };
   if (type.endsWith('woke') || type.endsWith('woken')) return { Icon: IconToday, tone };
   if (type.startsWith('intake')) return { Icon: IconAdd, tone };
-  if (type.startsWith('brief')) return { Icon: IconPen, tone };
+  if (type.startsWith('brief') || type.startsWith('review')) return { Icon: IconPen, tone };
   if (type.startsWith('inbox') || type.startsWith('change')) return { Icon: IconMail, tone };
   if (type === 'submission.submitted') return { Icon: IconCheck, tone };
   if (type.startsWith('submission') || type === 'alert.sent') return { Icon: IconHandIn, tone };

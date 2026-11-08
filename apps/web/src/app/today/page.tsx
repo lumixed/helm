@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation';
 import { formatDuration, rankAssignments } from '@helm/shared';
 import { AgentStatus } from '@/components/AgentStatus';
 import { BriefCard } from '@/components/BriefCard';
+import { DoneButton } from '@/components/DoneButton';
 import { ChangesCard } from '@/components/ChangesCard';
 import { IconAdd, IconArrow, IconBell, IconShare } from '@/components/icons';
 import { SubmissionAlerts } from '@/components/SubmissionsBoard';
@@ -17,6 +18,7 @@ import { currentUser } from '@/lib/session';
 import { listSubmissions } from '@/lib/submissions';
 import { llmPausedThisMonth } from '@/lib/limits';
 import { reminderViews } from '@/lib/reminders';
+import { latestWeeklyReview } from '@/lib/week';
 
 export const dynamic = 'force-dynamic';
 
@@ -35,15 +37,17 @@ export default async function TodayPage({
   if (!user.onboarded) redirect('/setup');
   const db = await getDb();
   const fullUser = (await currentUser())!;
-  const [confirmed, pending, brief, changes, submissions, paused, reminders] = await Promise.all([
-    listAssignments(db, user.id, user.timezone, { review: false }),
-    listAssignments(db, user.id, user.timezone, { review: true }),
-    todaysBrief(db, fullUser),
-    listChanges(db, fullUser),
-    listSubmissions(db, fullUser),
-    llmPausedThisMonth(db, user.id),
-    reminderViews(db, fullUser),
-  ]);
+  const [confirmed, pending, brief, changes, submissions, paused, reminders, week] =
+    await Promise.all([
+      listAssignments(db, user.id, user.timezone, { review: false }),
+      listAssignments(db, user.id, user.timezone, { review: true }),
+      todaysBrief(db, fullUser),
+      listChanges(db, fullUser),
+      listSubmissions(db, fullUser),
+      llmPausedThisMonth(db, user.id),
+      reminderViews(db, fullUser),
+      latestWeeklyReview(db, user.id),
+    ]);
   const pickable = confirmed
     .filter((a) => a.status === 'todo' || a.status === 'in_progress')
     .map((a) => ({ id: a.id, label: `${a.courseCode ? `${a.courseCode} · ` : ''}${a.title}` }));
@@ -99,7 +103,13 @@ export default async function TodayPage({
 
       <SubmissionAlerts initial={submissions} />
       <ChangesCard pending={changes.pending} applied={changes.applied} assignments={pickable} />
-      <BriefCard initial={brief} briefTime={user.briefTimeLocal} />
+      <BriefCard
+        initial={brief}
+        briefTime={user.briefTimeLocal}
+        doneIds={confirmed
+          .filter((a) => a.status === 'done' || a.status === 'submitted')
+          .map((a) => a.id)}
+      />
 
       {live.length > 0 && (
         <Card>
@@ -113,7 +123,7 @@ export default async function TodayPage({
                 >
                   {i + 1}
                 </span>
-                <div className="min-w-0">
+                <div className="min-w-0 flex-1">
                   <p className="font-medium text-ink">
                     {r.item.courseCode && (
                       <span className="text-muted">{r.item.courseCode} · </span>
@@ -127,6 +137,7 @@ export default async function TodayPage({
                       ` · plan ${formatDuration(Math.min(r.remainingMinutes, 120))} today`}
                   </p>
                 </div>
+                <DoneButton id={r.item.id} title={r.item.title} />
               </li>
             ))}
           </ol>
@@ -162,6 +173,34 @@ export default async function TodayPage({
             ))}
           </ul>
         </Card>
+      )}
+
+      {week && Date.now() - week.createdAt.getTime() < 3 * 86_400_000 && (
+        <Link
+          href="/week"
+          className="group rounded-card border border-line bg-surface p-5 transition-colors hover:border-line-strong sm:p-6"
+        >
+          <span className="flex items-center justify-between gap-3">
+            <span className="text-[17px] font-semibold tracking-tight text-ink">
+              Your week in review
+            </span>
+            <IconArrow
+              width={16}
+              height={16}
+              className="text-muted transition-transform group-hover:translate-x-0.5"
+            />
+          </span>
+          <span className="mt-2 line-clamp-2 block text-ink-soft">{week.summary}</span>
+          <span className="mt-3 flex flex-wrap gap-2">
+            <Chip tone={week.factsJson.done.length ? 'ok' : 'neutral'}>
+              {week.factsJson.done.length} done
+            </Chip>
+            <Chip tone={week.factsJson.slipped.length ? 'warn' : 'neutral'}>
+              {week.factsJson.slipped.length} slipped
+            </Chip>
+            <Chip>{week.factsJson.nextWeek.length} due next week</Chip>
+          </span>
+        </Link>
       )}
 
       {nextReminders.length > 0 ? (
@@ -220,7 +259,10 @@ export default async function TodayPage({
 
       <AgentStatus initial={agent} />
       <p className="text-center text-sm text-muted">
-        Your brief arrives each morning at {user.briefTimeLocal} (
+        <Link href="/week" className="font-medium text-ink underline-offset-4 hover:underline">
+          Your week in review
+        </Link>
+        {' · '}Your brief arrives each morning at {user.briefTimeLocal} (
         {user.timezone.replaceAll('_', ' ')}).
       </p>
     </Shell>

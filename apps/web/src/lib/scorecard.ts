@@ -285,7 +285,7 @@ export async function buildScorecard(
   rows.push({
     id: 'triggers',
     feature: 'Cron and webhook triggers',
-    how: 'The morning brief, every reminder (one cron each, in the person’s timezone) and a safety-net check run on platform cron; emails, documents and hand-ins arrive by webhook.',
+    how: 'The morning brief, the evening check-in and weekly review (when turned on), every reminder (one cron each, in the person’s timezone) and a safety-net check run on platform cron; emails, documents and hand-ins arrive by webhook.',
     status:
       crons.length > 0 && hookWakes.length > 0
         ? 'active'

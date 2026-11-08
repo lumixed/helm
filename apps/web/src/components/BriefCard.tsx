@@ -2,15 +2,19 @@
 
 import { useEffect, useState } from 'react';
 import type { TodaysBrief } from '@/lib/briefs';
+import { DoneButton } from './DoneButton';
 import { Button, Card } from './ui';
 
 /** Today's brief, plus "Send my brief now" which wakes the agent and waits for the new brief. */
 export function BriefCard({
   initial,
   briefTime,
+  doneIds = [],
 }: {
   initial: TodaysBrief | null;
   briefTime: string;
+  /** Focus items already marked done or handed in. */
+  doneIds?: string[];
 }) {
   const [brief, setBrief] = useState(initial);
   const [waitingSince, setWaitingSince] = useState<number | null>(null);
@@ -77,7 +81,7 @@ export function BriefCard({
                     >
                       {i + 1}
                     </span>
-                    <div>
+                    <div className="min-w-0 flex-1">
                       <p className="font-medium">
                         {f.courseCode && <span className="text-muted">{f.courseCode} · </span>}
                         {f.title}
@@ -89,6 +93,11 @@ export function BriefCard({
                           ` · plan ${f.minutes >= 60 ? `${Math.round((f.minutes / 60) * 10) / 10}h` : `${f.minutes} min`} today`}
                       </p>
                     </div>
+                    <DoneButton
+                      id={f.assignmentId}
+                      title={f.title}
+                      initialDone={doneIds.includes(f.assignmentId)}
+                    />
                   </li>
                 ))}
               </ol>

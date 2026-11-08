@@ -86,6 +86,20 @@ export async function mobileSchedule(
     .where(eq(schema.pushTokens.userId, user.id))
     .limit(1);
   if (pushPhones.length === 0) {
+    // The weekly review, when turned on (its own cron on the agent; day and time from Settings).
+    const weekly = user.routinesJson.weekly;
+    const sunday = weekly
+      ? nextOccurrence({ repeat: 'weekly', ...weekly }, user.timezone, now)
+      : null;
+    if (sunday)
+      out.push({
+        id: `week:${sunday.toISOString()}`,
+        // A minute after the cron, so the review is written by the time it's opened.
+        at: new Date(sunday.getTime() + 60_000).toISOString(),
+        title: 'Your week in review',
+        body: 'What you finished, what slipped, and next week at a glance.',
+        path: '/week',
+      });
     for (const r of await listReminders(db, user.id)) {
       if (!r.enabled) continue;
       let after = now;

@@ -19,6 +19,10 @@ import {
   type IntakeResultRequest,
   previousOccurrence,
   type ReminderFiredRequest,
+  WeekFacts,
+  templateWeekSummary,
+  weekWordingPrompt,
+  type WeeklyReviewRequest,
 } from '@helm/shared';
 import { z } from 'zod';
 import { DATA_DIR, runtime } from './config';
@@ -107,6 +111,8 @@ export interface HandlerDeps {
   ) => Promise<ChatReply & { model: string }>;
   /** Fetch a calendar feed's text (bounded). */
   fetchFeed: (url: string) => Promise<string>;
+  /** Word the weekly review's opener (LLM); the template is used when it fails. */
+  wordWeek: (facts: WeekFacts, name: string) => Promise<{ summary: string; writer: string }>;
   /** Read-only Gmail, or null when not connected. */
   gmail: () => GmailReader | null;
 }
@@ -192,6 +198,24 @@ const defaultDeps = (): HandlerDeps => ({
         ),
       runtime().reminders,
     ),
+  wordWeek: async (facts, name) => {
+    const p = weekWordingPrompt(facts, name);
+    const r = await llmJson(
+      llmChainFromEnv().map((o) => ({ ...o, timeoutMs: 20_000 })),
+      {
+        system: p.system,
+        user: p.user,
+        schemaName: 'week_opener',
+        jsonSchema: {
+          type: 'object',
+          required: ['summary'],
+          properties: { summary: { type: 'string' } },
+        },
+        zod: z.object({ summary: z.string().min(1).max(800) }),
+      },
+    );
+    return { summary: r.data.summary, writer: r.model };
+  },
   fetchFeed: async (url) => {
     const res = await fetch(url, { signal: AbortSignal.timeout(15_000), redirect: 'follow' });
     if (!res.ok) throw new Error(`feed HTTP ${res.status}`);
@@ -225,6 +249,7 @@ const WAKE_REASONS: Record<AgentMessage['type'], string> = {
   'calendar.sync': 'Woke to sync your Canvas calendar',
   'routine.due': 'Woke for your routine (Maritime cron)',
   'reminder.due': 'Woke for your reminder',
+  'review.weekly': 'Woke to write your weekly review',
 };
 
 /**
@@ -278,7 +303,12 @@ export async function handleMessage(msg: AgentMessage, ctx: HandlerContext): Pro
       break;
     }
     case 'routine.due': {
-      reply = await handleRoutine(msg.payload.routine, requestId, woke, ctx);
+      // The weekly routine writes the full review (stored, on /week, worded by the model);
+      // the evening check-in stays a short code-written note.
+      reply =
+        msg.payload.routine === 'weekly'
+          ? await handleWeeklyReview(requestId, woke, ctx)
+          : await handleRoutine(msg.payload.routine, requestId, woke, ctx);
       break;
     }
     case 'calendar.sync': {
@@ -289,6 +319,10 @@ export async function handleMessage(msg: AgentMessage, ctx: HandlerContext): Pro
         woke,
         ctx,
       );
+      break;
+    }
+    case 'review.weekly': {
+      reply = await handleWeeklyReview(requestId, woke, ctx);
       break;
     }
     case 'reminder.due': {
@@ -1472,4 +1506,73 @@ async function handleRoutine(
     }),
   );
   return `routine ${routine}: ${delivered ? 'sent' : 'written'}`;
+}
+
+/**
+ * Weekly review: the "weekly" routine's own Maritime cron (day and time set in Settings), or
+ * "Write it now". Helm supplies the week's facts (code picks them); the model only words a short
+ * opener, with a template if it fails.
+ */
+export async function handleWeeklyReview(
+  requestId: string,
+  woke: ReturnType<Emitter['event']>,
+  ctx: HandlerContext,
+): Promise<string> {
+  const deps = { ...defaultDeps(), ...ctx.deps };
+  const rt = runtime();
+  const fail = async (reason: string, detail: string) => {
+    await ctx.emitter.emit(
+      woke,
+      ctx.emitter.event({
+        eventId: `${requestId}:error`,
+        requestId,
+        type: 'agent.error',
+        reason,
+        payload: { stage: 'weekly_review', detail: detail.slice(0, 500) },
+      }),
+    );
+    return reason;
+  };
+  let facts: WeekFacts;
+  let name: string;
+  try {
+    const res = await deps.get('/api/agent/week');
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const body = (await res.json()) as { facts: unknown; name?: string };
+    facts = WeekFacts.parse(body.facts);
+    name = body.name ?? '';
+  } catch (err) {
+    return fail('Could not load your week for the review.', String(err));
+  }
+  let summary = templateWeekSummary(facts, name);
+  let writer = 'template';
+  if (facts.done.length + facts.slipped.length + facts.nextWeek.length > 0) {
+    try {
+      const w = await deps.wordWeek(facts, name);
+      if (w.summary.trim()) {
+        summary = w.summary.trim().slice(0, 800);
+        writer = w.writer;
+      }
+    } catch (err) {
+      console.warn('[review] LLM wording failed; using template', String(err).slice(0, 200));
+    }
+  }
+  const body: WeeklyReviewRequest = { studentId: rt.studentId, requestId, summary, writer };
+  try {
+    const res = await deps.post('/api/agent/review', body);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  } catch (err) {
+    return fail('Wrote your weekly review but could not deliver it.', String(err));
+  }
+  await ctx.emitter.emit(
+    woke,
+    ctx.emitter.event({
+      eventId: `${requestId}:review`,
+      requestId,
+      type: 'review.written',
+      reason: `Wrote your weekly review: ${facts.done.length} done, ${facts.slipped.length} slipped, ${facts.nextWeek.length} due next week`,
+      payload: { weekEnding: facts.weekEnding, writer, source: ctx.source },
+    }),
+  );
+  return `Weekly review for ${facts.weekEnding} (${writer})`;
 }

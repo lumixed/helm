@@ -39,6 +39,7 @@ export const AGENT_EVENT_TYPES = [
   'sandbox.ended',
   'reminder.set',
   'reminder.fired',
+  'review.written',
 ] as const;
 
 export const AgentEventType = z.enum(AGENT_EVENT_TYPES);

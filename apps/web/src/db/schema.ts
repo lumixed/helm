@@ -17,6 +17,7 @@ import {
   ASSIGNMENT_STATUSES,
   ASSIGNMENT_TYPES,
   type ReminderRule,
+  type WeekFacts,
 } from '@helm/shared';
 
 /** PRD section 9. All times are stored in UTC; the student's timezone is applied at display. */
@@ -505,3 +506,23 @@ export const reminders = pgTable(
   (t) => [index('reminders_user_idx').on(t.userId)],
 );
 export type Reminder = typeof reminders.$inferSelect;
+
+/** One weekly review per person per week (written by their agent on its Sunday cron). */
+export const weeklyReviews = pgTable(
+  'weekly_reviews',
+  {
+    id: id(),
+    userId: userRef(),
+    /** Local date the week ends on, YYYY-MM-DD. */
+    weekEnding: text('week_ending').notNull(),
+    summary: text('summary').notNull(),
+    /** Model that wrote the opener, or "template". */
+    writer: text('writer').notNull(),
+    /** WeekFacts from @helm/shared, as Helm computed them. */
+    factsJson: jsonb('facts_json').$type<WeekFacts>().notNull(),
+    requestId: text('request_id').notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex('weekly_reviews_user_week_uq').on(t.userId, t.weekEnding)],
+);
+export type WeeklyReview = typeof weeklyReviews.$inferSelect;
