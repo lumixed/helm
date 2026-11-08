@@ -24,7 +24,9 @@ export function Shell({
     <>
       {nav && <AppNav />}
       <main
-        className={`mx-auto flex w-full flex-col gap-6 px-5 pt-8 ${nav ? 'pb-28 sm:pb-16' : 'pb-16'} ${wide ? 'max-w-5xl' : 'max-w-2xl'}`}
+        id="main"
+        tabIndex={-1}
+        className={`mx-auto flex w-full flex-col gap-6 px-5 pt-8 focus:outline-none ${nav ? 'pb-28 sm:pb-16' : 'pb-16'} ${wide ? 'max-w-5xl' : 'max-w-2xl'}`}
       >
         <header className="flex flex-wrap items-end justify-between gap-4">
           <div className="flex flex-col gap-2">

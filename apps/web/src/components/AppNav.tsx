@@ -24,6 +24,12 @@ export function AppNav() {
     (href === '/intake' && path.startsWith('/review'));
   return (
     <>
+      <a
+        href="#main"
+        className="sr-only z-50 rounded-full bg-ink px-4 py-2 text-sm font-semibold text-white focus:not-sr-only focus:fixed focus:top-2 focus:left-2"
+      >
+        Skip to content
+      </a>
       <header className="sticky top-0 z-30 border-b border-line/80 bg-canvas/85 backdrop-blur">
         <div className="mx-auto flex h-14 w-full max-w-5xl items-center justify-between px-5">
           <Link
