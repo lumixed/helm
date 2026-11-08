@@ -143,7 +143,9 @@ export async function ensureStudentAgent(
     const { agent, created } = await maritime.createEndUserAgent(externalId, {
       ...(env.agentImage ? { imageName: env.agentImage } : { uploadS3Key: env.agentUploadKey }),
       idleTtlSeconds: 300,
-      useMaritimeLlm: process.env.MARITIME_LLM !== 'off',
+      // Opt-in: with Maritime LLM on and no AI credits, Maritime SKIPS the agent's scheduled wakes
+      // ("LLM credits are exhausted"), which would silently stop the morning brief.
+      useMaritimeLlm: process.env.MARITIME_LLM === 'on',
       initialEnvVars: agentEnv(user, token, env),
     });
     if (!created) {

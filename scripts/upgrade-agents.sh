@@ -46,7 +46,8 @@ curl -fsS "${auth[@]}" "$API/api/agents" |
   while read -r id; do
     echo "-- $id"
     # Per-agent Maritime LLM token (spend capped by the end-user policy). Applied by the redeploy.
-    [[ "${MARITIME_LLM:-on}" == off ]] || curl -fsS -X POST "${auth[@]}" "$API/api/agents/$id/reset-llm" >/dev/null || echo "   (Maritime LLM not enabled)"
+    # Opt-in (MARITIME_LLM=on): without AI credits Maritime skips the agent's scheduled wakes.
+    [[ "${MARITIME_LLM:-off}" != on ]] || curl -fsS -X POST "${auth[@]}" "$API/api/agents/$id/reset-llm" >/dev/null || echo "   (Maritime LLM not enabled)"
     maritime deploy "$id" --source docker --image "$IMG" --wait >/dev/null && echo "   ok ($(status_of "$id"))" || echo "   FAILED (see maritime history $id)"
   done
 echo "Done."

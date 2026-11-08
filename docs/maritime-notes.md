@@ -145,6 +145,10 @@ Helm uses this to give agents created before M7 their demo-portal login (`PORTAL
 
 Maritime documents no one-off timed triggers, so exact-time work is ours: `tick()` in `apps/web/src/lib/submissions.ts`, idempotent with conditional updates. It runs when (1) a student has the app open (the queue polls every 3 s, which gives the demo its ±seconds precision), (2) each agent's platform-cron heartbeat (`*/15 * * * *`) calls `POST /api/agent/heartbeat`, the safety net, well inside the default 2-hour lead, and (3) optionally an external pinger or Vercel Cron calls `/api/scheduler/tick` with `Bearer $CRON_SECRET`. Without (1) or (3), a hold notice or submission can be up to ~15 minutes late, never past the deadline: runs go without the full hold window once the deadline is within 30 minutes.
 
+## Maritime LLM without credits stops scheduled wakes (verified 2026-11-07)
+
+After `POST /api/agents/{id}/reset-llm` (Maritime LLM on) on an account with **no AI credits**, the agent's logs show `Scheduled wake skipped: your LLM credits are exhausted, so this agent was left asleep` for every cron fire, starting at the next one. Webhook and chat wakes still work, and our agent's Gemini fallback still answered them. Only the agent with Maritime LLM on was affected. Removing `OPENAI_API_KEY`/`OPENAI_BASE_URL` and restarting is our revert. **Maritime LLM is therefore opt-in (`MARITIME_LLM=on`)** until the account has prepaid AI credits.
+
 ## Open items
 
 - [x] Start the Maritime free trial.
