@@ -52,7 +52,7 @@ export function SubmissionItem({
     >
       <div className="flex flex-wrap items-start justify-between gap-2">
         <p className="font-medium">
-          {s.courseCode && <span className="text-accent">{s.courseCode} · </span>}
+          {s.courseCode && <span className="text-muted">{s.courseCode} · </span>}
           {s.title}
         </p>
         <Chip tone={st.tone}>{st.label}</Chip>
@@ -70,7 +70,9 @@ export function SubmissionItem({
       {s.status === 'scheduled' && !s.holdOpen && (
         <p className="text-sm">
           Helm submits it {s.submitLabel}
-          {s.submitAtFromDefault ? ' (2 hours before the deadline)' : ''}. You&apos;ll get a hold
+          {s.submitAtFromDefault ? ' (2 hours before the deadline)' : ''}
+          {/* Dates like "6:51 p.m." already end with a period. */}
+          {(s.submitAtFromDefault || !s.submitLabel?.endsWith('.')) && '.'} You&apos;ll get a hold
           notice first.
           {s.attempts > 0 && s.lastError && (
             <span className="block text-danger">
@@ -143,13 +145,14 @@ export function SubmissionItem({
           </p>
           <div className="flex gap-2">
             <Button
+              size="sm"
               className="flex-1"
               disabled={busy || (warns.length > 0 && !ack)}
               onClick={() => act('schedule', { ackWarnings: ack })}
             >
               Schedule submission
             </Button>
-            <Button variant="ghost" disabled={busy} onClick={() => act('cancel')}>
+            <Button size="sm" variant="ghost" disabled={busy} onClick={() => act('cancel')}>
               Discard
             </Button>
           </div>
@@ -158,6 +161,7 @@ export function SubmissionItem({
       {s.status === 'scheduled' && (
         <div className="flex flex-wrap gap-2">
           <Button
+            size="sm"
             variant={s.holdOpen ? 'primary' : 'ghost'}
             className="flex-1"
             disabled={busy}
@@ -166,6 +170,7 @@ export function SubmissionItem({
             Hold
           </Button>
           <Button
+            size="sm"
             variant="ghost"
             className="flex-1"
             disabled={busy}
@@ -174,11 +179,11 @@ export function SubmissionItem({
             Submit now
           </Button>
           {s.holdOpen ? (
-            <Button variant="ghost" className="flex-1" disabled={busy} onClick={onChange}>
+            <Button size="sm" variant="ghost" className="flex-1" disabled={busy} onClick={onChange}>
               Leave it
             </Button>
           ) : (
-            <Button variant="danger" disabled={busy} onClick={() => act('cancel')}>
+            <Button size="sm" variant="danger" disabled={busy} onClick={() => act('cancel')}>
               Cancel
             </Button>
           )}
@@ -186,10 +191,11 @@ export function SubmissionItem({
       )}
       {s.status === 'held' && (
         <div className="flex flex-wrap gap-2">
-          <Button className="flex-1" disabled={busy} onClick={() => act('release')}>
+          <Button size="sm" className="flex-1" disabled={busy} onClick={() => act('release')}>
             Release
           </Button>
           <Button
+            size="sm"
             variant="ghost"
             className="flex-1"
             disabled={busy}
@@ -197,7 +203,7 @@ export function SubmissionItem({
           >
             Submit now
           </Button>
-          <Button variant="danger" disabled={busy} onClick={() => act('cancel')}>
+          <Button size="sm" variant="danger" disabled={busy} onClick={() => act('cancel')}>
             Cancel
           </Button>
         </div>

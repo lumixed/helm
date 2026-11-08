@@ -45,7 +45,7 @@ export function ChangesCard({
             {applied.map((c) => (
               <li key={c.id}>
                 <p className="font-medium">
-                  {c.courseCode && <span className="text-accent">{c.courseCode} · </span>}
+                  {c.courseCode && <span className="text-muted">{c.courseCode} · </span>}
                   {c.title}: {c.label} {c.from ? `${c.from} → ` : ''}
                   {c.to}
                 </p>
@@ -102,7 +102,7 @@ function PendingItem({ c, assignments }: { c: ChangeView; assignments: Option[] 
       <p className="font-medium">
         {c.title ? (
           <>
-            {c.courseCode && <span className="text-accent">{c.courseCode} · </span>}
+            {c.courseCode && <span className="text-muted">{c.courseCode} · </span>}
             {c.title}:{' '}
           </>
         ) : (

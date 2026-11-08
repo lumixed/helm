@@ -48,7 +48,7 @@ export function BriefCard({
 
   return (
     <Card>
-      <div className="flex items-start justify-between gap-3">
+      <div className="flex flex-col gap-0.5 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
         <h2 className="text-[17px] font-semibold tracking-tight text-ink">Your brief</h2>
         {brief && (
           <p className="text-sm text-muted">
