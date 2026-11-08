@@ -255,7 +255,11 @@ describe('egress allowlist', () => {
     await ensureStudentAgent(db, user, client, env);
     state.agents.get('mt_1')!.status = 'active';
     await refreshAgent(db, user, client);
-    expect(state.network.get('mt_1')).toEqual(['generativelanguage.googleapis.com', 'helm.test']);
+    expect(state.network.get('mt_1')).toEqual([
+      '*.sb.mtm.sh',
+      'generativelanguage.googleapis.com',
+      'helm.test',
+    ]);
     state.network.clear();
     await refreshAgent(db, user, client);
     expect(state.network.size).toBe(0);

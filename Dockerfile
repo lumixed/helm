@@ -17,4 +17,5 @@ RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates
 WORKDIR /app
 ENV NODE_ENV=production
 COPY --from=build /repo/agent/dist/server.mjs ./server.mjs
+COPY --from=build /repo/agent/dist/sandbox-parse.mjs ./sandbox-parse.mjs
 CMD ["node", "/app/server.mjs"]

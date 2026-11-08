@@ -25,6 +25,19 @@ import {
   type InboundEmail,
 } from './tools/classify-email';
 import { DocumentError, readDocumentText, resolveInside } from './tools/read-document';
+import { SandboxUnavailable, parseInSandbox } from './tools/sandbox-parse';
+
+export interface DocumentRead {
+  text: string;
+  /** Where the untrusted file was opened. */
+  via: 'sandbox' | 'agent';
+  sandboxId?: string;
+  ms: number;
+  /** When the sandbox finished reading (it is deleted right after). */
+  ranAt?: string;
+  /** Why no sandbox was used, when one was wanted. */
+  fallback?: string;
+}
 import { createHash } from 'node:crypto';
 import fs from 'node:fs/promises';
 import path from 'node:path';
@@ -52,6 +65,8 @@ export interface HandlerContext {
 }
 
 export interface HandlerDeps {
+  /** Text of an untrusted document: in a throwaway sandbox when one is available. */
+  readDocument: (filePath: string, fileName: string, requestId: string) => Promise<DocumentRead>;
   extract: (
     text: string,
     ctx: { timezone: string; today: string; courseHint?: string },
@@ -84,6 +99,29 @@ function gmailReader(c: GmailCreds): GmailReader {
 }
 
 const defaultDeps = (): HandlerDeps => ({
+  readDocument: async (filePath, fileName, requestId) => {
+    if (process.env.SANDBOX_PARSING !== 'off') {
+      try {
+        const r = await parseInSandbox(filePath, fileName, requestId, {
+          post: (p, b) => postBackend(p, b),
+          studentId: runtime().studentId,
+        });
+        return { text: r.text, via: 'sandbox', sandboxId: r.sandboxId, ms: r.ms, ranAt: r.ranAt };
+      } catch (err) {
+        // A file the sandbox rejected is never opened here; only "no sandbox" falls back.
+        if (!(err instanceof SandboxUnavailable)) throw err;
+        const t0 = Date.now();
+        return {
+          text: await readDocumentText(filePath),
+          via: 'agent',
+          ms: Date.now() - t0,
+          fallback: err.message,
+        };
+      }
+    }
+    const t0 = Date.now();
+    return { text: await readDocumentText(filePath), via: 'agent', ms: Date.now() - t0 };
+  },
   extract: (text, ctx) => extractDeadlines(text, ctx, llmChainFromEnv()),
   post: (path, body) => postBackend(path, body),
   get: (path) => getBackend(path),
@@ -258,8 +296,22 @@ async function handleIntake(
 
   const started = Date.now();
   let out: ExtractOutput;
+  let read: DocumentRead | undefined;
+  let sandboxEvent: ReturnType<Emitter['event']> | null = null;
   try {
-    const text = await readDocumentText(filePath);
+    const doc = await deps.readDocument(filePath, fileName, requestId);
+    read = doc;
+    // Stamped now, so the timeline shows it before the sandbox is reported deleted.
+    if (doc.via === 'sandbox')
+      sandboxEvent = ctx.emitter.event({
+        eventId: `${requestId}:sandbox`,
+        requestId,
+        type: 'sandbox.command',
+        ...(doc.ranAt ? { occurredAt: doc.ranAt } : {}),
+        reason: `Opened "${fileName}" in a throwaway sandbox, not in your agent (${(doc.ms / 1000).toFixed(1)} s)`,
+        payload: { sandboxId: doc.sandboxId, fileName, ms: doc.ms },
+      });
+    const text = doc.text;
     const rt = runtime();
     out = await deps.extract(text, {
       timezone: rt.timezone,
@@ -303,6 +355,7 @@ async function handleIntake(
   const low = out.assignments.filter((a) => a.confidence < 0.7).length;
   await ctx.emitter.emit(
     woke,
+    ...(sandboxEvent ? [sandboxEvent] : []),
     ctx.emitter.event({
       eventId: `${requestId}:parsed`,
       requestId,
@@ -316,6 +369,8 @@ async function handleIntake(
         warnings: out.warnings.length,
         model: out.model,
         ms: Date.now() - started,
+        parsedIn: read?.via ?? 'agent',
+        ...(read?.fallback ? { sandboxFallback: read.fallback } : {}),
       },
     }),
   );

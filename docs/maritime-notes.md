@@ -175,6 +175,23 @@ Chat names and messages were never printed or stored outside a private scratch f
 
 **Risks:** Meta's terms forbid automated access to WhatsApp and Instagram; accounts can be flagged. Demo with test accounts and call it a prototype. Previews are truncated (long messages need opening the chat, which marks it read). Instagram is untested (password + 2FA through the same takeover).
 
+## WP-6: throwaway sandboxes for untrusted files (2026-11-07, built)
+
+Spike, then built. REST only, shapes from `maritime-sdk` 0.11 (`EphemeralSandboxesResource`, data-plane `Sandbox`):
+
+| Step   | Call                                                                                                                                       | Result                                                                                                                                                      |
+| ------ | ------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Create | `POST /api/sandboxes/ephemeral {name, idleMinutes: 2, timeLimitMinutes: 10, size: "small", network: {egress: "none"}}` + `Idempotency-Key` | 201 in ~1.9 s: `id` (`sbx-…`), `dataPlaneUrl` (`https://api-<id>.h2.sb.mtm.sh/v1`), per-sandbox `secret`; 2 vCPU, 4 GiB, Node 18, Python 3.12, no pdftotext |
+| Upload | `PUT {dataPlaneUrl}/files?path=…` raw body, `X-Maritime-Token: <secret>`                                                                   | 204. **File transfer over HTTP works** (the PRD only knew `maritime sandbox cp`)                                                                            |
+| Run    | `POST {dataPlaneUrl}/commands {cmd, background: false, timeoutSeconds}` with `Accept: application/json`                                    | `{state, exitCode, stdout, stderr}`                                                                                                                         |
+| End    | `DELETE /api/sandboxes/ephemeral/{id}`                                                                                                     | `state: ended`, `endedReason: killed_by_api_key`; later calls 410                                                                                           |
+
+Gotchas: `network: {internet: {mode: "none"}}` is refused (`network.egress must be all, none, or allowlist`); `{egress: "none"}` works and a test fetch from inside timed out. **Names may not contain `_`** (400 `invalid_request`). pdf.js needs `Iterator` helpers, which Node 18 lacks: the parser bundle includes `core-js/actual`.
+
+Design: the backend creates the sandbox with its key and gives the agent only `dataPlaneUrl` + `secret` (`POST /api/agent/sandbox`); the agent uploads `sandbox-parse.mjs` (3.3 MB, shipped next to `server.mjs`) and the file under a fixed name (`/tmp/helm/in/doc.<ext>`), runs it, and asks the backend to end it (`POST /api/agent/sandbox/{id}/end`). The agent allowlist adds `*.sb.mtm.sh` (wildcards are documented). If no sandbox is available, the agent reads the file itself and says so; a file the sandbox rejects is never opened by the agent.
+
+Live (local agent, real sandboxes): PDF 7 deadlines and DOCX 10 deadlines, ~6–7 s per document including the parser upload; a random-bytes "PDF" was rejected in the sandbox and deleted, with no fallback. Timeline: sandbox created → opened in a throwaway sandbox → deleted with its disk.
+
 ## Open items
 
 - [x] Start the Maritime free trial.

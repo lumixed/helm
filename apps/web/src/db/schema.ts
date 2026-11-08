@@ -442,3 +442,26 @@ export const pushTokens = pgTable(
     index('push_tokens_user_idx').on(t.userId),
   ],
 );
+
+/** Throwaway Maritime sandboxes used to open untrusted files (PRD v2 WP-6). */
+export const sandboxRuns = pgTable(
+  'sandbox_runs',
+  {
+    id: id(),
+    userId: userRef(),
+    sandboxId: text('sandbox_id').notNull(),
+    /** e.g. parse_document */
+    purpose: text('purpose').notNull(),
+    /** running | ended | failed */
+    status: text('status').notNull().default('running'),
+    startedAt: timestamp('started_at', { withTimezone: true }).notNull().defaultNow(),
+    endedAt: timestamp('ended_at', { withTimezone: true }),
+    /** Short, content-free summary ("PDF, 12,345 characters, 1.2 s"). */
+    resultSummary: text('result_summary'),
+  },
+  (t) => [
+    uniqueIndex('sandbox_runs_sandbox_uq').on(t.sandboxId),
+    index('sandbox_runs_user_idx').on(t.userId),
+  ],
+);
+export type SandboxRun = typeof sandboxRuns.$inferSelect;

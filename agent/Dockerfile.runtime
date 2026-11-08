@@ -7,4 +7,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates
 WORKDIR /app
 ENV NODE_ENV=production
 COPY server.mjs ./server.mjs
+# Document reader that runs inside throwaway sandboxes (WP-6), uploaded per document.
+COPY sandbox-parse.mjs ./sandbox-parse.mjs
 CMD ["node", "/app/server.mjs"]
