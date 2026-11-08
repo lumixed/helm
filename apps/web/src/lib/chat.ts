@@ -67,16 +67,23 @@ export async function relayChat(
   if (!agent?.maritimeAgentId) throw new Error('Your agent is still being set up.');
   const t = await mintChatToken(db, user, deps.maritime, RELAY_TTL_S);
   const base = (deps.apiUrl ?? 'https://api.maritime.sh').replace(/\/+$/, '');
-  const r = await f(`${base}/api/agents/${encodeURIComponent(t.agentId)}/chat`, {
-    method: 'POST',
-    headers: {
-      authorization: `Bearer ${t.token}`,
-      'content-type': 'application/json',
-      'Idempotency-Key': crypto.randomUUID(),
-    },
-    body: JSON.stringify({ message, conversation_id: conversationId }),
-    signal: AbortSignal.timeout(45_000),
-  });
+  const ask = () =>
+    f(`${base}/api/agents/${encodeURIComponent(t.agentId)}/chat`, {
+      method: 'POST',
+      headers: {
+        authorization: `Bearer ${t.token}`,
+        'content-type': 'application/json',
+        'Idempotency-Key': crypto.randomUUID(),
+      },
+      body: JSON.stringify({ message, conversation_id: conversationId }),
+      signal: AbortSignal.timeout(25_000),
+    });
+  // One retry for a passing hiccup (agent still waking, busy platform, a dropped connection).
+  let r = await ask().catch(() => null);
+  if (!r || r.status === 429 || r.status >= 500) {
+    await new Promise((res) => setTimeout(res, 2500));
+    r = await ask();
+  }
   const j = (await r.json().catch(() => ({}))) as { response?: string | null; error?: string };
   if (!r.ok) throw new Error(`agent chat ${r.status}`);
   return j.response ?? 'Your agent did not answer. Try again in a moment.';
