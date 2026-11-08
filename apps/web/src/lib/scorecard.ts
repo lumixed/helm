@@ -243,7 +243,7 @@ export async function buildScorecard(
   rows.push({
     id: 'sleep-wake',
     feature: 'Sleep and wake',
-    how: 'The agent sleeps when idle and wakes in about a second for the brief, a message or a hand-in.',
+    how: 'The agent sleeps when idle and wakes within seconds for the brief, a message or a hand-in.',
     status: lastWake ? 'active' : 'not_active',
     evidence: [
       {
