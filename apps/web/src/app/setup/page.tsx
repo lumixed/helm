@@ -42,7 +42,7 @@ export default async function SetupPage({
           : 'Step 1 of 2 · A few details so your brief arrives at the right time.'
       }
       nav={user.onboarded}
-      actions={<SignOutButton />}
+      actions={user.onboarded ? undefined : <SignOutButton />}
     >
       <Card>
         <CardTitle>Profile and brief</CardTitle>
@@ -86,6 +86,11 @@ export default async function SetupPage({
             See how your agent is isolated on Maritime, with live evidence.
           </span>
         </a>
+      )}
+      {user.onboarded && (
+        <div className="flex justify-center pt-2">
+          <SignOutButton />
+        </div>
       )}
     </Shell>
   );

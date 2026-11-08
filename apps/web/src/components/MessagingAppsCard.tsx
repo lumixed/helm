@@ -117,7 +117,11 @@ export function MessagingAppsCard({ initial }: { initial: AppView[] }) {
                 </>
               ) : (
                 <>
-                  <Button disabled={busy === a.app} onClick={() => run(a.app, 'POST', 'connect')}>
+                  <Button
+                    variant="secondary"
+                    disabled={busy === a.app}
+                    onClick={() => run(a.app, 'POST', 'connect')}
+                  >
                     {a.status === 'linking' ? 'Open the login again' : `Connect ${a.label}`}
                   </Button>
                   {a.status !== 'disconnected' && (
