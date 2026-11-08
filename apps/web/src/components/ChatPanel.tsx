@@ -6,6 +6,8 @@ import { Button, Card, textareaClass } from './ui';
 interface Msg {
   role: 'you' | 'helm';
   text: string;
+  /** Which model answered, e.g. "gpt-5-mini via Maritime LLM". */
+  meta?: string;
 }
 interface Token {
   token: string;
@@ -99,6 +101,30 @@ export function ChatPanel({ name }: { name: string }) {
     }
     setMsgs((x) => [...x, { role: 'helm', text: answer! }]);
     setBusy(false);
+    // Label the answer with the model that wrote it (from the agent's timeline event).
+    const asked = Date.now() - 2000;
+    for (let i = 0; i < 3; i++) {
+      const r = await fetch('/api/chat/meta', { cache: 'no-store' }).catch(() => null);
+      const j = r?.ok
+        ? ((await r.json()) as {
+            latest: { at: string; model: string | null; via: string | null } | null;
+          })
+        : null;
+      if (j?.latest?.model && Date.parse(j.latest.at) >= asked - 60_000) {
+        const label = `${j.latest.model} via ${j.latest.via}`;
+        setMsgs((x) => {
+          const copy = [...x];
+          for (let k = copy.length - 1; k >= 0; k--)
+            if (copy[k]!.role === 'helm') {
+              copy[k] = { ...copy[k]!, meta: label };
+              break;
+            }
+          return copy;
+        });
+        break;
+      }
+      await new Promise((res) => setTimeout(res, 1500));
+    }
   }
 
   return (
@@ -106,8 +132,8 @@ export function ChatPanel({ name }: { name: string }) {
       <ol aria-live="polite" className="flex flex-col gap-3">
         {msgs.length === 0 && (
           <li className="text-ink-soft">
-            Hi{name ? ` ${name}` : ''}. Ask me about your deadlines, what to do first, or what can
-            wait. I only read your plan; changes happen in the app.
+            Hi{name ? ` ${name}` : ''}. Ask about your deadlines and what to do first, or tell me
+            something to add, remind you of, or remember. I never send anything without you.
           </li>
         )}
         {msgs.map((m, i) => (
@@ -117,6 +143,7 @@ export function ChatPanel({ name }: { name: string }) {
           >
             <span className="sr-only">{m.role === 'you' ? 'You: ' : 'Helm: '}</span>
             {m.text}
+            {m.meta && <span className="mt-1 block text-xs text-muted">{m.meta}</span>}
           </li>
         ))}
         {busy && (
