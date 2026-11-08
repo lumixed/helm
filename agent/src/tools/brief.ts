@@ -7,6 +7,7 @@ import {
   type BriefItem,
   type Ranked,
   type StateAssignment,
+  type ScheduleItem,
 } from '@helm/shared';
 
 /** At most this much suggested work per focus item today. */
@@ -25,6 +26,9 @@ export interface BriefDraft {
   capacity: string;
   /** What the person asked their agent to remember (from its private disk). */
   notes?: string[];
+  /** Today's calendar events (titles are data). */
+  schedule?: ScheduleItem[];
+  timezone?: string;
 }
 
 /**
@@ -37,6 +41,7 @@ export async function buildBrief(
   trigger: BriefContent['trigger'],
   word?: WordFn,
   notes: string[] = [],
+  schedule: ScheduleItem[] = [],
 ): Promise<BriefContent> {
   const ranked = rankAssignments(state.assignments, now);
   const toItem = (r: Ranked<StateAssignment>): BriefItem => ({
@@ -65,8 +70,12 @@ export async function buildBrief(
     focus,
     dueSoon,
     changes: state.changes.slice(0, 5),
-    capacity,
+    capacity: schedule.length
+      ? `${capacity} ${schedule.length} thing${schedule.length === 1 ? '' : 's'} on your calendar.`
+      : capacity,
     notes: notes.slice(0, 15),
+    schedule,
+    timezone: state.timezone,
   };
 
   let summary = templateSummary(draft);
@@ -88,7 +97,8 @@ export async function buildBrief(
     focus,
     dueSoon,
     changes: draft.changes,
-    capacity,
+    schedule,
+    capacity: draft.capacity,
     trigger,
     writer,
   };
@@ -99,18 +109,22 @@ export function templateSummary(d: BriefDraft): string {
   const hour = Number(d.localTime.slice(0, 2));
   const part = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
   const hi = d.name ? `${part}, ${d.name}.` : `${part}.`;
-  if (d.focus.length === 0) return `${hi} Nothing is due soon. Enjoy the breathing room.`;
+  const first = (d.schedule ?? []).find((e) => !e.allDay);
+  const cal = first
+    ? ` First on your calendar: ${first.title} at ${new Intl.DateTimeFormat('en-CA', { timeZone: d.timezone ?? 'UTC', hour: 'numeric', minute: '2-digit' }).format(new Date(first.start))}.`
+    : '';
+  if (d.focus.length === 0) return `${hi} Nothing is due soon.${cal} Enjoy the breathing room.`;
   const overdue = d.focus.filter((f) => f.overdue).length;
-  const first = d.focus[0]!;
+  const top = d.focus[0]!;
   const lead =
     overdue > 0
       ? `${overdue} item${overdue === 1 ? ' is' : 's are'} past due, so start there.`
-      : `Start with ${first.courseCode ? `${first.courseCode} ` : ''}${first.title}.`;
+      : `Start with ${top.courseCode ? `${top.courseCode} ` : ''}${top.title}.`;
   const changed =
     d.changes.length > 0
       ? ` ${d.changes.length} deadline${d.changes.length === 1 ? '' : 's'} changed since your last brief.`
       : '';
-  return `${hi} ${lead}${changed} ${d.capacity}`;
+  return `${hi} ${lead}${changed}${cal} ${d.capacity}`;
 }
 
 export function wordingPrompt(d: BriefDraft): { system: string; user: string } {
@@ -143,6 +157,16 @@ export function wordingPrompt(d: BriefDraft): { system: string; user: string } {
         timeZone: 'UTC',
       }),
       personNotes: d.notes ?? [],
+      calendarToday: (d.schedule ?? []).slice(0, 8).map((e) => ({
+        title: e.title,
+        time: e.allDay
+          ? 'all day'
+          : new Intl.DateTimeFormat('en-CA', {
+              timeZone: d.timezone ?? 'UTC',
+              hour: 'numeric',
+              minute: '2-digit',
+            }).format(new Date(e.start)),
+      })),
     }),
   };
 }

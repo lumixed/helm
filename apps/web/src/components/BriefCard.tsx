@@ -102,6 +102,19 @@ export function BriefCard({
                 ))}
               </ol>
             )}
+            {brief.schedule.length > 0 && (
+              <div>
+                <h3 className="font-medium">Your calendar today</h3>
+                <ul className="text-sm">
+                  {brief.schedule.map((e, i) => (
+                    <li key={i}>
+                      <span className="tabular-nums text-muted">{e.timeLabel}</span> · {e.title}
+                      {e.location ? ` (${e.location})` : ''}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
             {brief.changes.length > 0 && (
               <div>
                 <h3 className="font-medium">Changed since your last brief</h3>

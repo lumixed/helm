@@ -25,7 +25,9 @@ export function egressAllowlist(env: NodeJS.ProcessEnv = process.env): string[] 
   if (env.SANDBOX_PARSING !== 'off') hosts.add('*.sb.mtm.sh');
   // Read-only Gmail (PRD v3): only Google's token endpoint and the Gmail API, nothing else.
   if (env.GOOGLE_CLIENT_ID)
-    for (const h of ['oauth2.googleapis.com', 'gmail.googleapis.com']) hosts.add(h);
+    // Google Calendar (read-only) lives on www.googleapis.com.
+    for (const h of ['oauth2.googleapis.com', 'gmail.googleapis.com', 'www.googleapis.com'])
+      hosts.add(h);
   return [...hosts].sort();
 }
 

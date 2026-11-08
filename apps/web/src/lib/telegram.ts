@@ -2,6 +2,7 @@ import { sendPushToUser } from './push';
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { eq } from 'drizzle-orm';
 import type { BriefContent } from '@helm/shared';
+import { eventTime } from './format';
 import type { Db } from '@/db';
 import { schema } from '@/db';
 
@@ -135,7 +136,7 @@ export async function sendToUser(db: Db, userId: string, text: string, buttons: 
 }
 
 /** The brief as a short message (PRD M5: <= 150 words, with a link). */
-export function briefMessage(b: BriefContent, appUrl: string | undefined): string {
+export function briefMessage(b: BriefContent, appUrl: string | undefined, tz = 'UTC'): string {
   const lines = [b.summary.trim()];
   if (b.focus.length) {
     lines.push('', 'Today:');
@@ -145,6 +146,12 @@ export function briefMessage(b: BriefContent, appUrl: string | undefined): strin
       ),
     );
   }
+  if (b.schedule?.length)
+    lines.push(
+      '',
+      'Your calendar:',
+      ...b.schedule.slice(0, 6).map((e) => `• ${eventTime(e, tz)} ${e.title}`),
+    );
   if (b.changes.length)
     lines.push(
       '',

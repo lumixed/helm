@@ -22,6 +22,7 @@ const brief = (o: Partial<BriefContent> = {}): BriefContent => ({
   focus: [],
   dueSoon: [],
   changes: [],
+  schedule: [],
   capacity: 'c',
   trigger: 'manual',
   writer: 'template',

@@ -93,6 +93,8 @@ describe('buildBrief', () => {
         dueSoon: [],
         changes: [],
         capacity: 'c',
+        schedule: [],
+        timezone: 'America/Vancouver',
       }),
     ).toBe('Good morning. 1 item is past due, so start there. c');
   });

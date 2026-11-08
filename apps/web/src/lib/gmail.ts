@@ -16,6 +16,8 @@ import { recordSent } from './maritime-webhooks';
 export const GMAIL_SCOPE = 'https://www.googleapis.com/auth/gmail.readonly';
 /** Lets Helm save drafts the person asks for. Google's scope also allows sending; Helm's code never sends. */
 export const GMAIL_COMPOSE_SCOPE = 'https://www.googleapis.com/auth/gmail.compose';
+/** Today's events in the brief. Read-only. */
+export const CALENDAR_SCOPE = 'https://www.googleapis.com/auth/calendar.readonly';
 export const GOOGLE_HOSTS = ['oauth2.googleapis.com', 'gmail.googleapis.com'];
 
 export const GMAIL_ENV = {
@@ -60,7 +62,7 @@ export function authUrl(userId: string, cfg = gmailConfig()!): string {
     client_id: cfg.clientId,
     redirect_uri: cfg.redirectUri,
     response_type: 'code',
-    scope: `${GMAIL_SCOPE} ${GMAIL_COMPOSE_SCOPE}`,
+    scope: `${GMAIL_SCOPE} ${GMAIL_COMPOSE_SCOPE} ${CALENDAR_SCOPE}`,
     access_type: 'offline',
     prompt: 'consent',
     include_granted_scopes: 'true',

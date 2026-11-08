@@ -1,7 +1,31 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { maritimeOrNull } from './student';
-import type { MaritimeClient } from './maritime';
+import { MaritimeError, type MaritimeClient } from './maritime';
+
+/**
+ * Maritime accepts 30 webhook calls a minute per caller per agent. A burst (several messages read
+ * from a desktop at once, a calendar sync, a hand-in) can hit that: wait as long as Maritime asks
+ * and try again, within a bounded time. Nothing is stored while waiting (messages can carry email
+ * or message text, which the backend never keeps).
+ */
+export async function withRateLimitRetry<T>(
+  fn: () => Promise<T>,
+  opts: { budgetMs?: number; sleep?: (ms: number) => Promise<void> } = {},
+): Promise<T> {
+  const sleep = opts.sleep ?? ((ms: number) => new Promise((r) => setTimeout(r, ms)));
+  const deadline = Date.now() + (opts.budgetMs ?? 25_000);
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await fn();
+    } catch (err) {
+      if (!(err instanceof MaritimeError) || err.status !== 429) throw err;
+      const wait = Math.min((err.retryAfterS ?? 2 ** attempt) * 1000 + Math.random() * 250, 10_000);
+      if (Date.now() + wait > deadline) throw err;
+      await sleep(wait);
+    }
+  }
+}
 
 /**
  * How the backend reaches a student's agent. In production that is Maritime (Files API +
@@ -34,7 +58,7 @@ export function maritimeTransport(m: MaritimeClient): AgentTransport {
         token = await m.webhookToken(agentId);
         tokens.set(agentId, token);
       }
-      await m.invokeWebhook(agentId, token, message);
+      await withRateLimitRetry(() => m.invokeWebhook(agentId, token!, message));
     },
   };
 }

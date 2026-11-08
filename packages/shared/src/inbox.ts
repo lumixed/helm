@@ -136,6 +136,14 @@ export const AgentInboxMessageRequest = z.object({
 });
 export type AgentInboxMessageRequest = z.infer<typeof AgentInboxMessageRequest>;
 
+/** Agent → backend: the person said in chat that they finished an item. */
+export const MarkDoneRequest = z.object({
+  studentId: z.string().min(1).max(128),
+  requestId: z.string().min(1).max(200),
+  assignmentId: z.string().min(1).max(100),
+});
+export type MarkDoneRequest = z.infer<typeof MarkDoneRequest>;
+
 /** Agent → backend: the person asked in chat to add something to their plan. */
 export const TaskCreateRequest = z.object({
   studentId: z.string().min(1).max(128),

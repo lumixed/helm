@@ -61,11 +61,21 @@ export const ChatMemoryOp = z.object({
 });
 export type ChatMemoryOp = z.infer<typeof ChatMemoryOp>;
 
+/** The items the model sees, in the order their refs ("A1", "A2", …) are given. */
+export function chatItems(state: AgentState) {
+  return state.assignments
+    .filter((a) => a.dueAt)
+    .sort((a, b) => a.dueAt!.localeCompare(b.dueAt!))
+    .slice(0, 40);
+}
+
 export const ChatReply = z.object({
   reply: z.string().min(1).max(1200),
   /** brief: plan / brief now; remind: set a reminder; task: add to the plan; answer: anything else. */
-  intent: z.enum(['answer', 'brief', 'remind', 'task', 'draft', 'memory']),
+  intent: z.enum(['answer', 'brief', 'remind', 'task', 'draft', 'memory', 'done']),
   memory: ChatMemoryOp.nullish(),
+  /** For "done": the ref of the item from the list ("A3"). */
+  doneRef: z.string().max(10).nullish(),
   reminder: ChatReminder.nullish(),
   task: ChatTask.nullish(),
   draft: ChatDraft.nullish(),
@@ -77,7 +87,10 @@ export const CHAT_JSON_SCHEMA = {
   required: ['reply', 'intent'],
   properties: {
     reply: { type: 'string', description: 'Short, plain answer, at most 80 words' },
-    intent: { type: 'string', enum: ['answer', 'brief', 'remind', 'task', 'draft', 'memory'] },
+    intent: {
+      type: 'string',
+      enum: ['answer', 'brief', 'remind', 'task', 'draft', 'memory', 'done'],
+    },
     memory: {
       type: 'object',
       description: 'Only when intent is "memory"',
@@ -95,6 +108,7 @@ export const CHAT_JSON_SCHEMA = {
         },
       },
     },
+    doneRef: { type: ['string', 'null'], description: 'For "done": the [A…] ref of the item' },
     draft: {
       type: 'object',
       description: 'Only when intent is "draft"',
@@ -172,13 +186,10 @@ export function chatSystemPrompt(
   facts: { id: string; text: string }[] = [],
 ): string {
   const tz = state.timezone;
-  const items = state.assignments
-    .filter((a) => a.dueAt)
-    .sort((a, b) => a.dueAt!.localeCompare(b.dueAt!))
-    .slice(0, 40)
+  const items = chatItems(state)
     .map(
-      (a) =>
-        `- ${a.courseCode ? `${a.courseCode} · ` : ''}${a.title} | due ${day(a.dueAt!, tz)}${a.weightPct != null ? ` | ${a.weightPct}%` : ''}${a.progressPct ? ` | ${a.progressPct}% done` : ''}`,
+      (a, i) =>
+        `- [A${i + 1}] ${a.courseCode ? `${a.courseCode} · ` : ''}${a.title} | due ${day(a.dueAt!, tz)}${a.weightPct != null ? ` | ${a.weightPct}%` : ''}${a.progressPct ? ` | ${a.progressPct}% done` : ''}`,
     )
     .join('\n');
   const changes = state.changes
@@ -212,6 +223,9 @@ their local time (23:59 if they gave no time; work out dates from today's date a
 (appointment for a visit or meeting, bill for a payment, assignment for school work, event to
 attend, otherwise task); area (course code, or Work / Home / Health / Money). In "reply" restate it
 briefly; Helm confirms it.
+4) Mark an item done when they say they finished, paid or handed it in ("I finished the lab
+report", "paid rent"). Set intent "done" and doneRef to the item's [A…] ref from the list below.
+If it could be more than one item, ask which instead (intent "answer").
 3) Write an email DRAFT when they ask you to write, draft or reply to an email ("ask my prof for
 an extension on Assignment 4", "tell my landlord I can't make Thursday"). Set intent "draft" and
 fill "draft": subject, and a short, polite plain-text body in their voice, signed with their name;
@@ -225,7 +239,7 @@ if they gave none; "morning" 9:00, "evening" 18:00); date YYYY-MM-DD for once (w
 today's date above; "tomorrow" is the next day); weekday 0-6 (Sunday 0) for weekly; day 1-31 for
 monthly. A time in the past today means the next day. For an appointment, remind at the time
 given unless they say otherwise. In "reply" just restate it briefly; Helm confirms it.
-4) Remember something about them when they ask you to ("remember that I don't work on Sundays",
+5) Remember something about them when they ask you to ("remember that I don't work on Sundays",
 "I'm a morning person, keep that in mind", "my landlord is Dave"). Set intent "memory", action
 "remember", and a short third-person note in "text". If they ask you to forget something, action
 "forget" with the matching ids from the list below; "forget everything" is "forget_all". If they

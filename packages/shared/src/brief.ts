@@ -47,6 +47,16 @@ export const BriefItem = z.object({
 });
 export type BriefItem = z.infer<typeof BriefItem>;
 
+/** One event from the person's own calendar (Google Calendar, read-only), for today's brief. */
+export const ScheduleItem = z.object({
+  title: z.string().max(200),
+  start: z.string(),
+  end: z.string().nullable(),
+  allDay: z.boolean(),
+  location: z.string().max(200).optional(),
+});
+export type ScheduleItem = z.infer<typeof ScheduleItem>;
+
 export const BriefContent = z.object({
   /** Local date in the student's timezone, YYYY-MM-DD. */
   forDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
@@ -55,6 +65,8 @@ export const BriefContent = z.object({
   focus: z.array(BriefItem).max(3),
   dueSoon: z.array(BriefItem).max(20),
   changes: AgentState.shape.changes,
+  /** Today's calendar events, when Google Calendar is connected (older briefs: none). */
+  schedule: z.array(ScheduleItem).max(30).default([]),
   /** "About 4h planned" style line. */
   capacity: z.string().max(200),
   trigger: z.enum(['cron', 'manual', 'onboarding', 'change']),

@@ -75,6 +75,7 @@ describe('gmail.sync handler', () => {
           draft: async () => ({ id: 'd1' }),
           listSent: async () => [],
           thread: async () => [],
+          events: async () => [],
         }),
         get: async () => new Response(JSON.stringify(state)),
         classify: async (e) => ({

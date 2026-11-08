@@ -81,6 +81,7 @@ async function setup(opts: {
                 drafts.push(d);
                 return { id: 'd1' };
               },
+              events: async () => [],
             }
           : null,
     },
@@ -135,6 +136,22 @@ describe('tell it to do things', () => {
       },
     });
     expect(await say('add old thing')).toMatch(/already passed/);
+    expect(posted).toHaveLength(0);
+  });
+});
+
+describe('mark done from chat', () => {
+  it('marks exactly the referenced item done', async () => {
+    const { say, posted } = await setup({ reply: { reply: 'x', intent: 'done', doneRef: 'A1' } });
+    expect(await say('I finished the lab report')).toMatch(/Marked “DATA 210 · Lab report” done/);
+    expect(posted[0]).toMatchObject({
+      path: '/api/agent/assignments/done',
+      body: { assignmentId: 'a1' },
+    });
+  });
+  it('asks which one when the ref is unknown', async () => {
+    const { say, posted } = await setup({ reply: { reply: 'x', intent: 'done', doneRef: 'A9' } });
+    expect(await say('I finished it')).toMatch(/Which one/);
     expect(posted).toHaveLength(0);
   });
 });

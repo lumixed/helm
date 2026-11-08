@@ -34,7 +34,7 @@ describe('OAuth state', () => {
   it('asks Google for Gmail reading plus drafts, with offline access', () => {
     const u = new URL(authUrl(maya.id));
     expect(u.searchParams.get('scope')).toBe(
-      'https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/gmail.compose',
+      'https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/gmail.compose https://www.googleapis.com/auth/calendar.readonly',
     );
     expect(u.searchParams.get('access_type')).toBe('offline');
     expect(u.searchParams.get('redirect_uri')).toBe('https://helm.test/api/gmail/callback');

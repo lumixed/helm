@@ -149,6 +149,7 @@ describe('sending', () => {
         ],
         dueSoon: [],
         changes: [],
+        schedule: [],
         capacity: 'c',
         trigger: 'cron',
         writer: 'template',

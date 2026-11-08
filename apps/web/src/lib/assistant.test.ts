@@ -37,7 +37,7 @@ describe('tasks from chat', () => {
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({
       title: 'Dentist',
-      courseCode: 'HEALTH',
+      courseCode: 'Health',
       confirmed: true,
       type: 'appointment',
     });

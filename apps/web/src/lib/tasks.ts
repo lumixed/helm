@@ -21,7 +21,13 @@ export async function addTaskFromChat(db: Db, user: User, t: TaskCreateRequest) 
   let row = existing;
   if (!row) {
     let courseId: string | null = null;
-    const code = t.area ? normalizeCourseCode(t.area) : '';
+    // Course codes ("data 210") are upper-cased; plain areas ("Home", "Health") keep their case.
+    const area = t.area?.trim() ?? '';
+    const code = /\d/.test(area)
+      ? normalizeCourseCode(area)
+      : area
+        ? area[0]!.toUpperCase() + area.slice(1)
+        : '';
     if (code) {
       const [c] = await db
         .insert(schema.courses)

@@ -15,6 +15,7 @@ import {
   runSubmissionChecks,
   type BriefRequest,
   type SubmissionResultRequest,
+  type ScheduleItem,
   type InboxResultRequest,
   type IntakeResultRequest,
   previousOccurrence,
@@ -40,10 +41,12 @@ import {
 } from './tools/classify-email';
 import { DocumentError, readDocumentText, resolveInside } from './tools/read-document';
 import { SandboxUnavailable, parseInSandbox } from './tools/sandbox-parse';
+import { listEvents } from './tools/gcal';
 import {
   ChatDraft,
   ChatMemory,
   ChatTask,
+  chatItems,
   chatReply,
   toReminderRule,
   type ChatReply,
@@ -154,6 +157,8 @@ export interface GmailReader {
   listSent(afterEpochS: number, beforeEpochS: number): Promise<{ id: string; threadId: string }[]>;
   /** A thread's messages, headers only. */
   thread(threadId: string): Promise<ThreadMessage[]>;
+  /** Google Calendar events between two instants (read-only). Absent = no calendar. */
+  events?(timeMin: string, timeMax: string): Promise<ScheduleItem[]>;
 }
 
 function gmailReader(c: GmailCreds): GmailReader {
@@ -165,6 +170,7 @@ function gmailReader(c: GmailCreds): GmailReader {
     draft: async (d) => createDraft(await t(), d),
     listSent: async (a, b) => listSent(await t(), a, b),
     thread: async (id) => threadMessages(await t(), id),
+    events: async (min, max) => listEvents(await t(), min, max),
   };
 }
 
@@ -787,7 +793,17 @@ async function handleBrief(
     return failed('Could not load your deadlines for the brief.', String(err));
   }
   const notes = (await new FactMemory(path.join(deps.dataDir, 'memory')).list()).map((f) => f.text);
-  const brief = await buildBrief(state, deps.now(), trigger, deps.word, notes);
+  // Today's calendar (Google Calendar, read-only) when it is connected; never blocks the brief.
+  let schedule: ScheduleItem[] = [];
+  const google = deps.gmail();
+  if (google?.events) {
+    const day = utcToLocal(deps.now(), state.timezone).slice(0, 10);
+    const from = localToUtc(`${day}T00:00`, state.timezone);
+    schedule = await google
+      .events(from.toISOString(), new Date(from.getTime() + 86_400_000).toISOString())
+      .catch(() => []);
+  }
+  const brief = await buildBrief(state, deps.now(), trigger, deps.word, notes, schedule);
   const body: BriefRequest = { studentId: state.studentId, requestId, brief };
   try {
     const res = await deps.post('/api/agent/brief', body);
@@ -1197,6 +1213,11 @@ export async function handleChat(
       ? 'Added something you told me about to your plan'
       : 'Could not add a task from chat';
   }
+  if (r.intent === 'done') {
+    const set = await markDoneFromChat(r, state, requestId, deps);
+    r = { ...r, reply: set.reply };
+    reason = set.ok ? 'Marked something done that you finished' : 'Could not mark an item done';
+  }
   if (r.intent === 'draft') {
     const set = await saveDraftFromChat(r, deps);
     r = { ...r, reply: set.reply };
@@ -1257,6 +1278,33 @@ export async function handleChat(
  * Quick capture: "remind me to pay rent on the 1st". The backend stores it and rewrites this
  * agent's settings file, so the reminder becomes its own Maritime cron on the next schedule sync.
  */
+/** "I finished the lab report" → that exact item (by its ref) marked done. */
+async function markDoneFromChat(
+  r: ChatReply,
+  state: AgentState,
+  requestId: string,
+  deps: HandlerDeps,
+): Promise<{ ok: boolean; reply: string }> {
+  const m = /^A(\d{1,2})$/i.exec((r.doneRef ?? '').trim());
+  const item = m ? chatItems(state)[Number(m[1]) - 1] : undefined;
+  if (!item) return { ok: false, reply: 'Which one did you finish? Tell me its name.' };
+  try {
+    const res = await deps.post('/api/agent/assignments/done', {
+      studentId: state.studentId,
+      requestId,
+      assignmentId: item.id,
+    });
+    if (!res.ok)
+      return { ok: false, reply: "I couldn't mark that done. Try the Done button on Today." };
+    return {
+      ok: true,
+      reply: `Nice work. Marked “${item.courseCode ? `${item.courseCode} · ` : ''}${item.title}” done; it's off your plan.`,
+    };
+  } catch {
+    return { ok: false, reply: "I couldn't reach Helm. Try again in a moment." };
+  }
+}
+
 /** "Ask my prof for an extension" → a Gmail draft the person reviews and sends. Never sends. */
 async function saveDraftFromChat(
   r: ChatReply,

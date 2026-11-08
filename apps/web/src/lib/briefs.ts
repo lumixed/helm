@@ -3,7 +3,8 @@ import { BriefContent, utcToLocal, type AgentState } from '@helm/shared';
 import type { Db } from '@/db';
 import { schema } from '@/db';
 import type { User } from '@/db/schema';
-import { formatWhen } from './format';
+import { eventTime, formatWhen } from './format';
+
 import { describeChange } from './inbox';
 
 /** What the agent needs for a brief: open, confirmed assignments and recent changes. */
@@ -107,6 +108,7 @@ export async function todaysBrief(db: Db, user: User, now = new Date()) {
     ...parsed.data,
     focus: parsed.data.focus.map(label),
     dueSoon: parsed.data.dueSoon.map(label),
+    schedule: parsed.data.schedule.map((e) => ({ ...e, timeLabel: eventTime(e, user.timezone) })),
   };
 }
 export type TodaysBrief = NonNullable<Awaited<ReturnType<typeof todaysBrief>>>;

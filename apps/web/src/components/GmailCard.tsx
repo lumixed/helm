@@ -65,10 +65,10 @@ export function GmailCard({ address, result }: { address: string | null; result?
       ) : (
         <>
           <p className="mt-1">
-            Let your agent read your Gmail (read-only) to catch deadlines, bills and appointments,
-            and save email drafts you ask for. Google&apos;s permission screen says
-            &ldquo;send&rdquo; because drafts and sending share one permission; Helm only ever saves
-            drafts, and never sends or deletes anything.
+            Let your agent read your Gmail and today’s calendar (read-only) to catch deadlines,
+            bills and appointments, and save email drafts you ask for. Google&apos;s permission
+            screen says &ldquo;send&rdquo; because drafts and sending share one permission; Helm
+            only ever saves drafts, and never sends or deletes anything.
           </p>
           <a
             href="/api/gmail/connect"

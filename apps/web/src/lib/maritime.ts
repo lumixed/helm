@@ -8,6 +8,8 @@ export class MaritimeError extends Error {
     readonly status: number,
     readonly detail: string,
     readonly path: string,
+    /** Seconds Maritime asked us to wait (Retry-After header or retryAfterS), when it said. */
+    readonly retryAfterS: number | null = null,
   ) {
     super(`Maritime ${path} -> ${status}: ${detail}`);
   }
@@ -148,7 +150,18 @@ export function createMaritimeClient(opts: {
         typeof data === 'object' && data && 'detail' in data
           ? String((data as { detail: unknown }).detail)
           : text.slice(0, 300);
-      throw new MaritimeError(res.status, detail, path);
+      const header = Number(res.headers.get('retry-after'));
+      const fromBody =
+        typeof data === 'object' && data && 'retryAfterS' in data
+          ? Number((data as { retryAfterS: unknown }).retryAfterS)
+          : NaN;
+      const retryAfterS =
+        Number.isFinite(header) && header > 0
+          ? header
+          : Number.isFinite(fromBody)
+            ? fromBody
+            : null;
+      throw new MaritimeError(res.status, detail, path, retryAfterS);
     }
     return { status: res.status, data: data as T };
   }
