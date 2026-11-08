@@ -18,6 +18,10 @@ export const ASSIGNMENT_TYPES = [
   'lab',
   'reading',
   'presentation',
+  'bill',
+  'appointment',
+  'task',
+  'event',
   'other',
 ] as const;
 export const AssignmentType = z.enum(ASSIGNMENT_TYPES);
@@ -114,7 +118,11 @@ export const LLM_EXTRACTION_JSON_SCHEMA = {
           'evidence',
         ],
         properties: {
-          courseCode: { type: 'string', description: 'Course code like "DATA 210"' },
+          courseCode: {
+            type: 'string',
+            description:
+              'Area label: a course code like "DATA 210", or a short area like "Work", "Rent", "Health"',
+          },
           courseName: { type: ['string', 'null'] },
           title: { type: 'string' },
           dueLocal: {

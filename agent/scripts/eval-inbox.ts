@@ -10,6 +10,8 @@ const assignments: StateAssignment[] = [
   ['p1', 'DATA 210', 'Project proposal', '2026-11-20T07:59:00.000Z'],
   ['r4', 'ENGL 150', 'Reading response 4', '2026-11-10T07:59:00.000Z'],
   ['e1', 'ENGL 150', 'Essay 2', '2026-11-18T07:59:00.000Z'],
+  ['rent', 'Rent', 'November rent', '2026-12-01T07:59:00.000Z'],
+  ['dent', 'Health', 'Dentist checkup', '2026-11-16T17:30:00.000Z'],
 ].map(([id, courseCode, title, dueAt]) => ({
   id: id!,
   courseCode: courseCode!,
@@ -132,6 +134,77 @@ const cases: Case[] = [
     decision: ['needs_confirmation'],
   },
 ];
+
+// Everyday life (PRD v3): messages people share from other apps.
+cases.push(
+  {
+    name: 'WhatsApp: new inspection (appointment)',
+    email: {
+      source: 'whatsapp',
+      from: 'Landlord (Sam)',
+      subject: '',
+      receivedAt: at,
+      body: 'Hi! The yearly apartment inspection is on Wednesday, November 11 at 10am. Please make sure someone is home. Thanks! Sam',
+    },
+    kind: ['new_assignment'],
+    assignmentId: null,
+    dueLocal: '2026-11-11T10:00',
+    decision: ['review'],
+  },
+  {
+    name: 'WhatsApp: rent date moved',
+    email: {
+      source: 'whatsapp',
+      from: 'Landlord (Sam)',
+      subject: '',
+      receivedAt: at,
+      body: 'Hey, small change: November rent is due on December 3 at 5pm this time instead of the 1st.',
+    },
+    kind: ['deadline_changed'],
+    assignmentId: 'rent',
+    dueLocal: '2026-12-03T17:00',
+    decision: ['applied', 'needs_confirmation'],
+  },
+  {
+    name: 'Instagram: party invite (event)',
+    email: {
+      source: 'instagram',
+      from: 'Jordan',
+      subject: '',
+      receivedAt: at,
+      body: 'omg you HAVE to come to my birthday dinner on Friday, November 13, 7pm at the noodle place on Main!! 🎉',
+    },
+    kind: ['new_assignment'],
+    dueLocal: '2026-11-13T19:00',
+    decision: ['review'],
+  },
+  {
+    name: 'Text: dentist rescheduled',
+    email: {
+      source: 'sms',
+      from: 'Smile Dental',
+      subject: '',
+      receivedAt: at,
+      body: 'Smile Dental: your dentist checkup has been moved to Tuesday, November 17 at 9:30am. Reply C to confirm.',
+    },
+    kind: ['deadline_changed'],
+    assignmentId: 'dent',
+    dueLocal: '2026-11-17T09:30',
+    decision: ['applied'],
+  },
+  {
+    name: 'Text: chit-chat',
+    email: {
+      source: 'sms',
+      from: 'Mom',
+      subject: '',
+      receivedAt: at,
+      body: 'Did you eat today? Call me when you can ❤️',
+    },
+    kind: ['none', 'info'],
+    decision: ['ignored'],
+  },
+);
 
 const apiKey = process.env.GEMINI_API_KEY;
 if (!apiKey) throw new Error('Set GEMINI_API_KEY');

@@ -36,12 +36,12 @@ export default async function DemoPortal({
         role="note"
         className="bg-neutral-800 px-4 py-2 text-center text-sm font-medium text-white"
       >
-        DEMO PORTAL: a fake course website for the Helm demo. Not a real school system. Files are
-        not stored, only their fingerprint.
+        DEMO PORTAL: a fake website for the Helm demo. Not a real school, employer or government
+        system. Files are not stored, only their fingerprint.
       </div>
       <main className="mx-auto flex max-w-2xl flex-col gap-5 px-4 py-6">
         <header>
-          <h1 className="text-2xl font-semibold">Course submissions (demo)</h1>
+          <h1 className="text-2xl font-semibold">Submissions (demo portal)</h1>
           <p className="text-sm text-neutral-600 dark:text-neutral-300">
             {user
               ? `Signed in as ${user.name || user.email} (demo sign-on through Helm)`

@@ -11,8 +11,8 @@ export default async function SignInPage() {
   return (
     <Shell title="Helm">
       <p className="text-lg leading-relaxed">
-        Your private deadline agent. It plans your day, watches for changes, and gets your finished
-        work in on time.
+        Your private assistant. It reads your email and the messages you share with it, tells you
+        each morning what to do today, and handles routine hand-ins with your OK.
       </p>
       <Card>
         <h2 className="mb-4 text-lg font-semibold">Sign in</h2>

@@ -77,13 +77,13 @@ export function SubmissionsBoard({
   return (
     <>
       <Card>
-        <h2 className="text-lg font-semibold">Hand in finished work</h2>
+        <h2 className="text-lg font-semibold">Let Helm hand it in</h2>
         <p className="mt-1 text-sm">
-          Helm never edits your work. It checks the file, waits for your OK, and submits it on time
-          with a receipt.
+          Homework, an application, a form for work: anything you hand in on a website. Helm never
+          edits it. It checks the file, waits for your OK, and hands it in on time with a receipt.
         </p>
         {assignments.length === 0 ? (
-          <p className="mt-3">No open assignments with a due date yet.</p>
+          <p className="mt-3">Nothing open with a due date yet.</p>
         ) : (
           <form
             className="mt-3 flex flex-col gap-3"
@@ -92,7 +92,7 @@ export function SubmissionsBoard({
               void upload(e.currentTarget);
             }}
           >
-            <Field label="Assignment" htmlFor="sub-assignment">
+            <Field label="What is it for?" htmlFor="sub-assignment">
               <select
                 id="sub-assignment"
                 name="assignmentId"
@@ -112,14 +112,14 @@ export function SubmissionsBoard({
               htmlFor="sub-file"
               hint={
                 chosen?.allowed.length
-                  ? `This assignment takes ${chosen.allowed.map((t) => `.${t}`).join(', ')}. Up to 4 MB.`
+                  ? `This one takes ${chosen.allowed.map((t) => `.${t}`).join(', ')}. Up to 4 MB.`
                   : 'Up to 4 MB.'
               }
             >
               <input id="sub-file" name="file" type="file" required className={inputClass} />
             </Field>
             <fieldset className="flex flex-col gap-2">
-              <legend className="font-medium">When should Helm submit it?</legend>
+              <legend className="font-medium">When should Helm hand it in?</legend>
               {demo && (
                 <label className="flex min-h-11 items-center gap-2">
                   <input
@@ -177,7 +177,7 @@ export function SubmissionsBoard({
 
       <section aria-labelledby="queue-h" className="flex flex-col gap-3">
         <h2 id="queue-h" className="text-lg font-semibold">
-          Your submissions
+          Your hand-ins
         </h2>
         {items.length === 0 ? (
           <p>Nothing yet.</p>

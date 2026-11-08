@@ -57,6 +57,13 @@
       "when": 1794094370955,
       "tag": "0007_submissions_portal",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1794097778096,
+      "tag": "0008_everyone",
+      "breakpoints": true
     }
   ]
 }

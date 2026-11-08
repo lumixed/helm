@@ -50,10 +50,10 @@ export async function POST(req: Request) {
       courseHint?: unknown;
     } | null;
     const text = typeof body?.text === 'string' ? body.text.trim() : '';
-    if (text.length < 40) return fail(400, 'Paste the full syllabus text (at least a few lines).');
+    if (text.length < 40) return fail(400, 'Paste the full text (at least a few lines).');
     if (text.length > 200_000) return fail(413, 'That text is too long.');
     bytes = new TextEncoder().encode(text);
-    fileName = 'pasted-syllabus.txt';
+    fileName = 'pasted-text.txt';
     courseHint =
       typeof body?.courseHint === 'string'
         ? body.courseHint.trim().slice(0, 100) || undefined

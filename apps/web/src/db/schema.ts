@@ -192,6 +192,8 @@ export const inboxMessages = pgTable(
     id: id(),
     userId: userRef(),
     fromAddr: text('from_addr').notNull(),
+    /** email (read by Helm), or whatsapp / instagram / sms / other (shared by the person). */
+    source: text('source').notNull().default('email'),
     subject: text('subject').notNull().default(''),
     receivedAt: timestamp('received_at', { withTimezone: true }).notNull(),
     /** The email body itself is not stored; it goes to the agent. */

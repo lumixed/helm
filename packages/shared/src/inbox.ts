@@ -17,6 +17,18 @@ export const CHANGE_KINDS = [
 export const ChangeKind = z.enum(CHANGE_KINDS);
 export type ChangeKind = z.infer<typeof ChangeKind>;
 
+/** Where a message came from. Only email is read by Helm itself; the rest are shared by the person. */
+export const MESSAGE_SOURCES = ['email', 'whatsapp', 'instagram', 'sms', 'other'] as const;
+export const MessageSource = z.enum(MESSAGE_SOURCES);
+export type MessageSource = z.infer<typeof MessageSource>;
+export const SOURCE_LABEL: Record<MessageSource, string> = {
+  email: 'email',
+  whatsapp: 'WhatsApp message',
+  instagram: 'Instagram message',
+  sms: 'text message',
+  other: 'message',
+};
+
 /** Both the email's confidence and the assignment match must reach this to apply on their own. */
 export const AUTO_APPLY_CONFIDENCE = 0.85;
 

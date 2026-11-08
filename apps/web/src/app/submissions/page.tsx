@@ -36,7 +36,7 @@ export default async function SubmissionsPage() {
     }));
   return (
     <Shell
-      title="Submit"
+      title="Hand in"
       actions={
         <nav aria-label="Main" className="flex gap-1">
           <Link

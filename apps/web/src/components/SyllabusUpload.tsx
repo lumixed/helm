@@ -56,7 +56,7 @@ export function SyllabusUpload() {
     setPhase({
       kind: 'reading',
       intakeId: data.intakeId,
-      fileName: data.fileName ?? 'your syllabus',
+      fileName: data.fileName ?? 'your document',
       since: Date.now(),
     });
   }
@@ -64,7 +64,7 @@ export function SyllabusUpload() {
   const busy = phase.kind === 'sending' || phase.kind === 'reading';
   return (
     <Card>
-      <div role="tablist" aria-label="How to add a syllabus" className="mb-4 flex gap-2">
+      <div role="tablist" aria-label="How to add a document" className="mb-4 flex gap-2">
         {(['file', 'paste'] as const).map((m) => (
           <button
             key={m}
@@ -82,7 +82,7 @@ export function SyllabusUpload() {
       <form ref={formRef} onSubmit={onSubmit} className="flex flex-col gap-4">
         {mode === 'file' ? (
           <Field
-            label="Syllabus file"
+            label="Document file"
             htmlFor="file"
             hint="PDF, Word (.docx) or text, up to 10 MB."
           >
@@ -98,9 +98,9 @@ export function SyllabusUpload() {
           </Field>
         ) : (
           <Field
-            label="Syllabus text"
+            label="Document text"
             htmlFor="text"
-            hint="Copy everything from the syllabus, including the schedule."
+            hint="Paste the whole thing, including any schedule or dates."
           >
             <textarea
               id="text"
@@ -114,9 +114,9 @@ export function SyllabusUpload() {
           </Field>
         )}
         <Field
-          label="Course (optional)"
+          label="Area (optional)"
           htmlFor="courseHint"
-          hint='e.g. "DATA 210". Helps if the syllabus never says it.'
+          hint='e.g. "DATA 210", "Work" or "Rent". Helps group what Helm finds.'
         >
           <input
             id="courseHint"
@@ -144,7 +144,7 @@ export function SyllabusUpload() {
             ? 'Sending to your agent…'
             : phase.kind === 'reading'
               ? 'Reading…'
-              : 'Read my syllabus'}
+              : 'Read my document'}
         </Button>
         <p className="text-sm text-sea-800/80 dark:text-sea-100/80">
           The file goes only to your private agent. Helm keeps the deadlines it finds, not the file.

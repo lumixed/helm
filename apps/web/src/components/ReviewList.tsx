@@ -78,7 +78,7 @@ export function ReviewList({ intakeId }: { intakeId?: string }) {
   if (rows.length === 0)
     return (
       <Card>
-        <p>Nothing to review. Add a syllabus to get started.</p>
+        <p>Nothing to review. Add a document to get started.</p>
       </Card>
     );
 
@@ -192,7 +192,7 @@ export function ReviewList({ intakeId }: { intakeId?: string }) {
                     {a.assumption && <p className="text-sm">⚠︎ {a.assumption}</p>}
                     {a.evidence && (
                       <p className="text-sm text-sea-800/80 italic dark:text-sea-100/80">
-                        From the syllabus: “{a.evidence}”
+                        From the source: “{a.evidence}”
                       </p>
                     )}
                   </div>

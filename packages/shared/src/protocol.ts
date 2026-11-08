@@ -67,6 +67,8 @@ export const InboxMessageMessage = z.object({
   type: z.literal('inbox.message'),
   payload: z.object({
     inboxMessageId: z.string().min(1),
+    /** email, whatsapp, instagram, sms, other. Older senders omit it (email). */
+    source: z.enum(['email', 'whatsapp', 'instagram', 'sms', 'other']).default('email'),
     from: z.string().max(320),
     subject: z.string().max(1000),
     receivedAt: z.iso.datetime({ offset: true }),

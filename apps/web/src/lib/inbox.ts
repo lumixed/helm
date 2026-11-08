@@ -2,6 +2,8 @@ import { createHash } from 'node:crypto';
 import { and, desc, eq, gt, inArray, isNull, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import {
+  MessageSource,
+  SOURCE_LABEL,
   decideChange,
   encodeAgentMessage,
   type EmailChange,
@@ -19,6 +21,8 @@ import { onAssignmentDueChanged } from './submissions';
 
 /** POST /api/inbox/ingest. The body goes to the agent; the backend keeps only a hash of it. */
 export const IngestBody = z.object({
+  /** email, or a message the person shared from WhatsApp, Instagram, SMS or elsewhere. */
+  source: MessageSource.default('email'),
   from: z.string().trim().min(1).max(320),
   subject: z.string().trim().max(1000).default(''),
   body: z.string().trim().min(1).max(100_000),
@@ -48,12 +52,21 @@ export async function ingestEmail(
 ): Promise<{ inboxMessageId: string; requestId: string; duplicate: boolean }> {
   const receivedAt = input.receivedAt ? new Date(input.receivedAt) : now;
   const bodyHash = createHash('sha256')
-    .update(JSON.stringify([input.from, input.subject, receivedAt.toISOString(), input.body]))
+    .update(
+      JSON.stringify([
+        input.source,
+        input.from,
+        input.subject,
+        receivedAt.toISOString(),
+        input.body,
+      ]),
+    )
     .digest('hex');
   const [created] = await db
     .insert(schema.inboxMessages)
     .values({
       userId: user.id,
+      source: input.source,
       fromAddr: input.from,
       subject: input.subject,
       receivedAt,
@@ -85,6 +98,7 @@ export async function ingestEmail(
         studentId: user.id,
         payload: {
           inboxMessageId: created.id,
+          source: input.source,
           from: input.from,
           subject: input.subject,
           receivedAt: receivedAt.toISOString(),
@@ -184,7 +198,7 @@ export async function saveInboxResult(
     .returning();
   if (!claimed) return storedAnswer(db, msg);
 
-  const source = `${senderName(msg.fromAddr)}'s email`;
+  const source = `${senderName(msg.fromAddr)}'s ${SOURCE_LABEL[MessageSource.catch('other').parse(msg.source)]}`;
   let changeId: string | null = null;
   const field = FIELD_FOR[change.kind];
   if ((decision === 'applied' || decision === 'needs_confirmation') && field) {
@@ -367,6 +381,7 @@ export async function listChanges(db: Db, user: User, now = new Date()) {
       title: schema.assignments.title,
       courseCode: schema.courses.code,
       from: schema.inboxMessages.fromAddr,
+      channel: schema.inboxMessages.source,
       subject: schema.inboxMessages.subject,
       receivedAt: schema.inboxMessages.receivedAt,
     })
@@ -397,6 +412,7 @@ export async function listChanges(db: Db, user: User, now = new Date()) {
     reason: r.c.reason,
     evidence: r.c.evidence,
     sender: r.from ? senderName(r.from) : r.c.source,
+    channel: r.channel ? SOURCE_LABEL[MessageSource.catch('other').parse(r.channel)] : null,
     subject: r.subject,
     receivedLabel: r.receivedAt ? formatWhen(r.receivedAt, user.timezone) : null,
     decidedLabel: r.c.decidedAt ? formatWhen(r.c.decidedAt, user.timezone) : null,
@@ -418,6 +434,7 @@ export async function inboxStatus(db: Db, userId: string, id: string) {
   if (!m) return null;
   return {
     id: m.id,
+    source: m.source,
     status: m.status,
     decision: m.decision,
     reason: m.decisionReason,

@@ -68,13 +68,23 @@ const change = (o: Partial<EmailChange> = {}): EmailChange => ({
   ...o,
 });
 
-async function ingest(user = maya, body = 'Assignment 3 is now due Friday at 5pm.') {
+async function ingest(
+  user = maya,
+  body = 'Assignment 3 is now due Friday at 5pm.',
+  source: 'email' | 'whatsapp' = 'email',
+) {
   return ingestEmail(
     db,
     user,
     'agent-1',
     transport,
-    { from: 'Prof. Lee <lee@uni.test>', subject: 'DATA 210', body, receivedAt: now.toISOString() },
+    {
+      source,
+      from: 'Prof. Lee <lee@uni.test>',
+      subject: 'DATA 210',
+      body,
+      receivedAt: now.toISOString(),
+    },
     now,
   );
 }
@@ -118,6 +128,20 @@ describe('saveInboxResult', () => {
     expect(applied[0]!.to).toMatch(/Fri, Nov 13/);
     const state = await agentState(db, maya);
     expect(state.changes[0]).toMatchObject({ field: 'due date', source: "Prof. Lee's email" });
+  });
+
+  it('names the channel for a message the person shared', async () => {
+    const { inboxMessageId } = await ingest(
+      maya,
+      'Assignment 3 is now due Friday at 5pm.',
+      'whatsapp',
+    );
+    expect(JSON.parse(sent.at(-1)!).payload.source).toBe('whatsapp');
+    await saveInboxResult(db, maya.id, result(inboxMessageId, change()), now);
+    const { applied } = await listChanges(db, maya, now);
+    expect(applied[0]).toMatchObject({ channel: 'WhatsApp message' });
+    const state = await agentState(db, maya);
+    expect(state.changes[0]!.source).toBe("Prof. Lee's WhatsApp message");
   });
 
   it('answers a retried delivery with the first result and applies once', async () => {

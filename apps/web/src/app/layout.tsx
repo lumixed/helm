@@ -3,7 +3,8 @@ import './globals.css';
 
 export const metadata: Metadata = {
   title: 'Helm',
-  description: 'A private deadline agent for every student.',
+  description:
+    'A private assistant for everyone: one agent that reads your email and messages, plans your day, and handles routine hand-ins with your OK.',
 };
 
 export const viewport: Viewport = {

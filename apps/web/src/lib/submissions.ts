@@ -154,10 +154,7 @@ export async function createSubmission(
   if (
     busy.some((b) => b.status === 'scheduled' || b.status === 'held' || b.status === 'submitting')
   )
-    throw new SubmissionError(
-      409,
-      'This assignment already has a scheduled submission. Cancel it first.',
-    );
+    throw new SubmissionError(409, 'This already has a scheduled hand-in. Cancel it first.');
 
   const id = randomUUID();
   const fileName = input.fileName.trim().slice(0, 200) || 'homework';

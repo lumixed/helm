@@ -4,6 +4,7 @@ import {
   type AgentMessage,
   AgentSubmissionJob,
   InboxResultResponse,
+  SOURCE_LABEL,
   blocking,
   runSubmissionChecks,
   type BriefRequest,
@@ -305,8 +306,9 @@ async function handleInbox(
   ctx: HandlerContext,
 ): Promise<string> {
   const deps = { ...defaultDeps(), ...ctx.deps };
-  const { inboxMessageId, from, subject, receivedAt, body } = msg.payload;
+  const { inboxMessageId, source, from, subject, receivedAt, body } = msg.payload;
   const sender = senderName(from);
+  const what = SOURCE_LABEL[source];
   const fail = async (reason: string, detail?: string) => {
     await ctx.emitter.emit(
       woke,
@@ -339,7 +341,7 @@ async function handleInbox(
   let out: ClassifyOutput;
   try {
     out = await deps.classify(
-      { from, subject, receivedAt, body },
+      { source, from, subject, receivedAt, body },
       { timezone: state.timezone, assignments: state.assignments },
     );
   } catch (err) {
@@ -379,7 +381,7 @@ async function handleInbox(
       requestId,
       type: 'inbox.classified',
       reason:
-        `Read an email from ${sender}: ${change.summary}` +
+        `Read ${what === 'email' ? 'an email' : `a ${what} you shared`} from ${sender}: ${change.summary}` +
         (change.injectionSuspected
           ? ' It contained instructions aimed at an AI; Helm treated them as data and took no action from them.'
           : ''),
@@ -399,7 +401,7 @@ async function handleInbox(
   ];
   const title = decision.assignmentTitle ?? change.title ?? 'an assignment';
   if (decision.decision === 'applied') {
-    const what =
+    const detail =
       change.kind === 'deadline_changed' && change.newDueAt
         ? `now due ${whenIn(change.newDueAt, state.timezone)}`
         : 'requirements updated';
@@ -408,7 +410,7 @@ async function handleInbox(
         eventId: `${requestId}:applied`,
         requestId,
         type: 'change.applied',
-        reason: `Updated "${title}": ${what}, from ${sender}'s email`,
+        reason: `Updated "${title}": ${detail}, from ${sender}'s ${what}`,
         payload: { inboxMessageId, changeId: decision.changeId, kind: change.kind, from: sender },
       }),
     );
@@ -420,7 +422,7 @@ async function handleInbox(
         type: 'change.detected',
         reason:
           decision.decision === 'review'
-            ? `New deadline from ${sender}'s email to check: "${title}"`
+            ? `New item from ${sender}'s ${what} to check: "${title}"`
             : `Needs your OK: ${change.summary} ${decision.reason}`,
         payload: {
           inboxMessageId,

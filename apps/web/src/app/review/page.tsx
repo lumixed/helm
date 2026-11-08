@@ -12,7 +12,7 @@ export default async function ReviewPage({
   await requireProfile();
   const { intake } = await searchParams;
   return (
-    <Shell title="Check your deadlines">
+    <Shell title="Check what Helm found">
       <ReviewList intakeId={intake} />
     </Shell>
   );

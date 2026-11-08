@@ -5,7 +5,7 @@ import { formatDuration, rankAssignments } from '@helm/shared';
 import { AgentStatus } from '@/components/AgentStatus';
 import { BriefCard } from '@/components/BriefCard';
 import { ChangesCard } from '@/components/ChangesCard';
-import { SimulateEmail } from '@/components/SimulateEmail';
+import { ShareMessage } from '@/components/ShareMessage';
 import { SubmissionAlerts } from '@/components/SubmissionsBoard';
 import { listSubmissions } from '@/lib/submissions';
 import { demoEmailTemplates } from '@/lib/demo-emails';
@@ -49,7 +49,7 @@ export default async function TodayPage() {
             href="/submissions"
             className="min-h-11 rounded-xl px-3 py-2 font-medium underline-offset-4 hover:underline"
           >
-            Submit
+            Hand in
           </Link>
           <Link
             href="/timeline"
@@ -87,7 +87,7 @@ export default async function TodayPage() {
           <p className="mt-2">
             {confirmed.length === 0 ? 'No deadlines yet. ' : 'Nothing is pressing right now. '}
             <Link href="/intake" className="font-medium underline underline-offset-4">
-              Add a syllabus
+              Add a document
             </Link>
           </p>
         ) : (
@@ -136,10 +136,10 @@ export default async function TodayPage() {
       <p className="text-sm text-sea-800/80 dark:text-sea-100/80">
         Your morning brief arrives at {user.briefTimeLocal} ({user.timezone.replaceAll('_', ' ')}).{' '}
         <Link href="/intake" className="underline underline-offset-4">
-          Add another syllabus
+          Add another document
         </Link>
       </p>
-      {demo && <SimulateEmail templates={demoEmailTemplates(confirmed, user.timezone, now)} />}
+      <ShareMessage templates={demo ? demoEmailTemplates(confirmed, user.timezone, now) : []} />
       <AgentStatus initial={agent} />
     </Shell>
   );

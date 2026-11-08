@@ -96,7 +96,7 @@ export function runSubmissionChecks(i: CheckInput): CheckResult[] {
       check: 'file_type',
       status: ext ? 'pass' : 'warn',
       message: ext
-        ? `The syllabus doesn't limit file types; .${ext} it is.`
+        ? `No file type is required; .${ext} it is.`
         : 'This file has no extension. Check the portal will accept it.',
     });
   else
@@ -106,7 +106,7 @@ export function runSubmissionChecks(i: CheckInput): CheckResult[] {
         : {
             check: 'file_type',
             status: 'fail',
-            message: `This assignment takes ${allowed.map((a) => `.${a}`).join(', ')}, not ${ext ? `.${ext}` : 'a file without an extension'}.`,
+            message: `This one takes ${allowed.map((a) => `.${a}`).join(', ')}, not ${ext ? `.${ext}` : 'a file without an extension'}.`,
           },
     );
 
@@ -136,13 +136,13 @@ export function runSubmissionChecks(i: CheckInput): CheckResult[] {
     out.push({
       check: 'deadline',
       status: 'fail',
-      message: `This assignment is marked ${i.assignment.status.replace('_', ' ')}.`,
+      message: `This item is marked ${i.assignment.status.replace('_', ' ')}.`,
     });
   else if (!due)
     out.push({
       check: 'deadline',
       status: 'fail',
-      message: 'This assignment has no due date. Add one first.',
+      message: 'This item has no due date. Add one first.',
     });
   else if (due.getTime() <= i.now.getTime())
     out.push({ check: 'deadline', status: 'fail', message: 'The deadline has passed.' });
@@ -163,7 +163,7 @@ export function runSubmissionChecks(i: CheckInput): CheckResult[] {
     out.push({
       check: 'portal',
       status: 'fail',
-      message: 'The portal already has a submission for this assignment.',
+      message: 'The portal already has a submission for this one.',
     });
   return out;
 }
