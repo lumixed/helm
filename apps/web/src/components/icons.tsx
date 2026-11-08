@@ -77,12 +77,12 @@ export const IconArrow = (p: SVGProps<SVGSVGElement>) => (
   </Icon>
 );
 
-/** Helm mark: a simple ship's wheel. */
+/** Helm mark: a ship's wheel (same geometry as the app icon). */
 export const HelmMark = (p: SVGProps<SVGSVGElement>) => (
   <Icon strokeWidth={1.8} {...p}>
-    <circle cx="12" cy="12" r="6" />
-    <circle cx="12" cy="12" r="1.6" />
-    <path d="M12 2v4M12 18v4M2 12h4M18 12h4M4.9 4.9l2.9 2.9M16.2 16.2l2.9 2.9M4.9 19.1l2.9-2.9M16.2 7.8l2.9-2.9" />
+    <circle cx="12" cy="12" r="6.2" />
+    <circle cx="12" cy="12" r="1.7" />
+    <path d="M12 2.5v7.8M12 13.7v7.8M2.5 12h7.8M13.7 12h7.8M5.3 5.3l5.5 5.5M13.2 13.2l5.5 5.5M18.7 5.3l-5.5 5.5M10.8 13.2l-5.5 5.5" />
   </Icon>
 );
 export const IconMoon = (p: SVGProps<SVGSVGElement>) => (
