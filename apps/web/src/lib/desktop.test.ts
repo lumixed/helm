@@ -33,6 +33,10 @@ const computers: ComputersClient = {
     log.push('screenshot');
     return new Uint8Array([1]);
   },
+  zoom: async () => {
+    log.push('zoom');
+    return new Uint8Array([1]);
+  },
   sleep: async () => {
     log.push('sleep');
   },
@@ -99,7 +103,7 @@ describe('connect', () => {
     expect(r.url).toMatch(/^https:\/\/maritime\.sh\/computer\//);
     expect(log).toEqual([
       `ensure user_${maya.id}`,
-      'act wait:,key:ctrl+l,type:https://web.whatsapp.com,key:Return,wait:',
+      'act wait:,key:ctrl+l,type:https://web.whatsapp.com,key:Return,wait:,key:ctrl+0,key:ctrl+minus',
       'screenshot',
       'viewer control',
     ]);
@@ -150,7 +154,7 @@ describe('check', () => {
       },
     });
     // Read-only: a check is wake, screenshot, sleep. No clicks, no typing.
-    expect(log).toEqual(['wake', 'screenshot', 'sleep']);
+    expect(log).toEqual(['wake', 'zoom', 'sleep']);
     expect((await checkApp(db, await row(), deps(), { force: true })).newMessages).toBe(0);
   });
 

@@ -193,6 +193,18 @@ cases.push(
     decision: ['applied'],
   },
   {
+    name: 'WhatsApp: meeting time, no day',
+    email: {
+      source: 'whatsapp',
+      from: 'Unknown number',
+      subject: '',
+      receivedAt: at,
+      body: 'Can you confirm our meeting at 2:30?',
+    },
+    kind: ['new_assignment'],
+    decision: ['review'],
+  },
+  {
     name: 'Text: chit-chat',
     email: {
       source: 'sms',

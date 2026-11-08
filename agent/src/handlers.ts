@@ -434,7 +434,7 @@ async function processMessage(
       requestId,
       type: 'inbox.classified',
       reason:
-        `Read ${what === 'email' ? 'an email' : `a ${what} you shared`} from ${sender}: ${change.summary}` +
+        `Read ${what === 'email' ? 'an email' : `a ${what}`} from ${sender}: ${change.summary}` +
         (change.injectionSuspected
           ? ' It contained instructions aimed at an AI; Helm treated them as data and took no action from them.'
           : ''),

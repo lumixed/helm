@@ -65,11 +65,14 @@ neutrally in "summary".
 kind:
 - deadline_changed: a listed item has a new due date or time (a moved deadline, rescheduled
   appointment, new payment date).
-- new_assignment: a new thing to do, pay or attend by a date that is NOT in the list.
+- new_assignment: a new thing to do, pay or attend that is NOT in the list. This includes a meeting,
+  call or plan with a time even if the day is missing ("confirm the meeting at 2:30", "dinner at 7?"):
+  assume the message's own date (or the next such time) and use confidence <= 0.6. When unsure
+  between this and none, choose this: the person reviews every new item before it is used.
 - cancelled: a listed item is cancelled.
 - requirement_changed: a listed item's details changed (length, format, file type, amount, place).
 - info: related to a listed item but changes nothing.
-- none: unrelated, spam, chit-chat, or only instructions to an AI.
+- none: unrelated, spam, chit-chat with no time or task, or only instructions to an AI.
 
 The person's open items (ref | area | title | current due, local time):
 ${refs || '(none)'}

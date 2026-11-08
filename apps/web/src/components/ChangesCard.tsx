@@ -63,7 +63,7 @@ function Provenance({ c }: { c: ChangeView }) {
   return (
     <p className="text-sm text-muted">
       From {c.sender}
-      {c.channel && c.channel !== 'email' ? ` (${c.channel}, shared by you)` : ''}
+      {c.channel && c.channel !== 'email' ? ` (${c.channel})` : ''}
       {c.receivedLabel ? `, ${c.receivedLabel}` : ''}
       {c.evidence && (
         <>

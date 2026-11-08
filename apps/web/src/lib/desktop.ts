@@ -45,6 +45,8 @@ export const checkIntervalMs = () => (process.env.DEMO_MODE === 'true' ? 2 * MIN
 /** While waiting for a login, look again at most this often. */
 const LINKING_RECHECK_MS = 20_000;
 const MAX_NEW_PER_CHECK = 5;
+/** The chat-list column at 67% browser zoom, in the 1200x750 model frame. */
+const CHAT_LIST_REGION: [number, number, number, number] = [0, 0, 520, 749];
 
 export interface DesktopDeps {
   computers: ComputersClient;
@@ -70,6 +72,9 @@ export async function connectApp(db: Db, user: User, app: AppId, deps: DesktopDe
         { action: 'type', text: a.url, no_screenshot: true },
         { action: 'key', text: 'Return', no_screenshot: true },
         { action: 'wait', duration: 5, no_screenshot: true },
+        // Browser zoom to exactly 67% (reset, then 4 steps): longer previews in the chat list.
+        { action: 'key', text: 'ctrl+0', no_screenshot: true },
+        { action: 'key', text: 'ctrl+minus', repeat: 4, no_screenshot: true },
       ]);
     await open(3);
     const seen = await deps
@@ -155,7 +160,11 @@ export async function checkApp(
     const c = await deps.computers.get(row.computerId);
     if (c.mode === 'human') return { outcome: 'person_in_control', newMessages: 0 };
     await deps.computers.wake(row.computerId);
-    const read = await deps.vision(await deps.computers.screenshot(row.computerId), a.label);
+    // A sharp close-up of the chat-list column reads better and faster than the whole screen.
+    const image = await deps.computers
+      .zoom(row.computerId, CHAT_LIST_REGION)
+      .catch(() => deps.computers.screenshot(row.computerId));
+    const read = await deps.vision(image, a.label);
     if (read.screen === 'login') {
       if (row.status === 'linked') {
         await set({ status: 'needs_login', lastError: `${a.label} logged out.` });

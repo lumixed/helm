@@ -20,6 +20,8 @@ export interface ComputersClient {
   /** Run actions; returns nothing (screenshots come from screenshot()). */
   act(id: string, actions: Record<string, unknown>[]): Promise<void>;
   screenshot(id: string): Promise<Uint8Array>;
+  /** Sharp close-up of a region of the model frame (default 1200x750), as PNG bytes. */
+  zoom(id: string, region: [number, number, number, number]): Promise<Uint8Array>;
   sleep(id: string): Promise<void>;
   remove(id: string): Promise<void>;
   /** Signed link. control = takeover until the person clicks Done; watch = view only. */
@@ -89,6 +91,15 @@ export function computersClient(opts: {
         undefined,
         true,
       )) as Uint8Array;
+    },
+    async zoom(id, region) {
+      const r = (await call('POST', `/${enc(id)}/actions`, { action: 'zoom', region })) as {
+        imageB64?: string | null;
+        error?: string | null;
+      };
+      if (!r.imageB64)
+        throw new ComputerError(400, 'zoom_failed', r.error ?? 'zoom returned no image');
+      return new Uint8Array(Buffer.from(r.imageB64, 'base64'));
     },
     async sleep(id) {
       await call('POST', `/${enc(id)}/sleep`);
