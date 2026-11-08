@@ -131,6 +131,43 @@ function errorMessage(body: string): string {
 }
 
 /**
+ * Providers in order. Maritime LLM can refuse (402 no credits, 429 spend cap, 503), so when it is
+ * primary and a Gemini key exists, Gemini is the fallback.
+ */
+export function llmChainFromEnv(
+  env: NodeJS.ProcessEnv = process.env,
+): (GeminiOptions & { provider: 'maritime' | 'gemini' })[] {
+  const primary = llmFromEnv(env);
+  const chain = [primary];
+  if (primary.provider === 'maritime' && env.GEMINI_API_KEY) {
+    chain.push({
+      provider: 'gemini',
+      apiKey: env.GEMINI_API_KEY,
+      baseUrl: GEMINI_BASE,
+      models: undefined,
+    });
+  }
+  return chain;
+}
+
+/** Try each provider in turn; the error lists every attempt. */
+export async function llmJson<T>(
+  chain: GeminiOptions[],
+  req: Parameters<typeof geminiJson<T>>[1],
+): Promise<JsonCallResult<T>> {
+  const attempts: string[] = [];
+  for (const opts of chain) {
+    try {
+      return await geminiJson(opts, req);
+    } catch (err) {
+      if (!(err instanceof LlmError)) throw err;
+      attempts.push(...err.attempts);
+    }
+  }
+  throw new LlmError(`All models failed: ${attempts.join(' | ')}`, attempts);
+}
+
+/**
  * Which LLM the agent uses. Maritime LLM (per-agent `mllm_` token, spend cap enforced by
  * Maritime) when the platform injected it; otherwise Gemini with GEMINI_API_KEY.
  * LLM_MODELS (comma-separated) overrides the model list for either.

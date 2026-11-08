@@ -19,6 +19,19 @@ import {
   type MaritimeClient,
 } from './maritime';
 
+/**
+ * Per-student limits (PRD v2 WP-3). The AI cap applies to Maritime LLM calls; wakes_per_hour is
+ * well above what the demo needs (brief + heartbeat + a few events per hour).
+ */
+export const STUDENT_POLICY = {
+  llm_spend_cap_cents_per_month: 300,
+  wakes_per_hour: 120,
+  idle_sleep_seconds: 300,
+  mem_mb: 2048,
+  vcpus: 1,
+  disk_gb: 5,
+} as const;
+
 /** Maritime end-user id for a Helm student (PRD M2). */
 export const externalIdFor = (userId: string) => `user_${userId}`;
 
@@ -130,6 +143,7 @@ export async function ensureStudentAgent(
     const { agent, created } = await maritime.createEndUserAgent(externalId, {
       ...(env.agentImage ? { imageName: env.agentImage } : { uploadS3Key: env.agentUploadKey }),
       idleTtlSeconds: 300,
+      useMaritimeLlm: process.env.MARITIME_LLM !== 'off',
       initialEnvVars: agentEnv(user, token, env),
     });
     if (!created) {
@@ -150,11 +164,7 @@ export async function ensureStudentAgent(
     });
     // Bounded cost and wakes per student (PRD S8). Needs no special scope; failure is non-fatal.
     await maritime
-      .setPolicy(externalId, {
-        llm_spend_cap_cents_per_month: 300,
-        wakes_per_hour: 120,
-        idle_sleep_seconds: 300,
-      })
+      .setPolicy(externalId, STUDENT_POLICY)
       .catch((err: unknown) => console.warn('[provision] setPolicy failed', String(err)));
   } catch (err) {
     await setAgent(db, row.id, { status: 'error', lastError: describe(err) });

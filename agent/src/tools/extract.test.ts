@@ -103,3 +103,38 @@ describe('extractDeadlines (fake Gemini)', () => {
     ).rejects.toThrow(/All models failed/);
   });
 });
+
+describe('provider chain', () => {
+  it('falls back from Maritime LLM to Gemini when the proxy refuses', async () => {
+    const { llmChainFromEnv, llmJson } = await import('../llm/gemini');
+    const chain = llmChainFromEnv({
+      OPENAI_API_KEY: 'mllm_x',
+      OPENAI_BASE_URL: 'https://api.maritime.sh/api/llm/v1',
+      GEMINI_API_KEY: 'g',
+    } as NodeJS.ProcessEnv);
+    expect(chain.map((c) => c.provider)).toEqual(['maritime', 'gemini']);
+    const hosts: string[] = [];
+    const fetch = (async (u: string | URL | Request) => {
+      hosts.push(new URL(String(u)).host);
+      if (String(u).includes('maritime'))
+        return new Response('{"error":{"message":"budget_exhausted"}}', { status: 402 });
+      return new Response(
+        JSON.stringify({ choices: [{ message: { content: '{"summary":"hi"}' } }] }),
+      );
+    }) as typeof globalThis.fetch;
+    const { z } = await import('zod');
+    const r = await llmJson(
+      chain.map((c) => ({ ...c, fetch })),
+      {
+        system: 's',
+        user: 'u',
+        schemaName: 'x',
+        jsonSchema: {},
+        zod: z.object({ summary: z.string() }),
+      },
+    );
+    expect(r.data.summary).toBe('hi');
+    expect(hosts[0]).toBe('api.maritime.sh');
+    expect(hosts.at(-1)).toBe('generativelanguage.googleapis.com');
+  });
+});

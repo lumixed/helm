@@ -14,7 +14,7 @@ import {
 } from '@helm/shared';
 import { z } from 'zod';
 import { DATA_DIR, runtime } from './config';
-import { geminiJson, LlmError, llmFromEnv } from './llm/gemini';
+import { LlmError, llmChainFromEnv, llmJson } from './llm/gemini';
 import { buildBrief, wordingPrompt, type WordFn } from './tools/brief';
 import { getBackend, postBackend } from './backend';
 import { extractDeadlines, type ExtractOutput } from './tools/extract';
@@ -84,15 +84,14 @@ function gmailReader(c: GmailCreds): GmailReader {
 }
 
 const defaultDeps = (): HandlerDeps => ({
-  extract: (text, ctx) => extractDeadlines(text, ctx, llmFromEnv()),
+  extract: (text, ctx) => extractDeadlines(text, ctx, llmChainFromEnv()),
   post: (path, body) => postBackend(path, body),
   get: (path) => getBackend(path),
   classify: (email, ctx) => classifyEmail(email, ctx, { ...llmFromEnv(), timeoutMs: 30_000 }),
   word: async (draft) => {
-    const llm = llmFromEnv();
     const p = wordingPrompt(draft);
-    const r = await geminiJson(
-      { ...llm, timeoutMs: 20_000 },
+    const r = await llmJson(
+      llmChainFromEnv().map((o) => ({ ...o, timeoutMs: 20_000 })),
       {
         system: p.system,
         user: p.user,

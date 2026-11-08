@@ -44,6 +44,8 @@ export interface CreateAgentInput {
   uploadS3Key?: string;
   idleTtlSeconds?: number;
   initialEnvVars?: EnvSeed[];
+  /** Per-agent `mllm_` token for Maritime LLM; its spend is capped by the end-user policy. */
+  useMaritimeLlm?: boolean;
 }
 
 export interface MaritimeClient {

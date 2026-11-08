@@ -5,7 +5,7 @@ import {
   localToUtc,
   type LlmAssignment,
 } from '@helm/shared';
-import { geminiJson, type GeminiOptions } from '../llm/gemini';
+import { llmJson, type GeminiOptions } from '../llm/gemini';
 
 const MAX_CHARS = 60_000;
 
@@ -62,10 +62,10 @@ Today is ${ctx.today} (${ctx.timezone}).${ctx.courseHint ? ` The person says thi
 export async function extractDeadlines(
   text: string,
   ctx: ExtractContext,
-  llm: GeminiOptions,
+  llm: GeminiOptions | GeminiOptions[],
 ): Promise<ExtractOutput> {
   const clipped = text.length > MAX_CHARS ? text.slice(0, MAX_CHARS) : text;
-  const { data, model } = await geminiJson(llm, {
+  const { data, model } = await llmJson(Array.isArray(llm) ? llm : [llm], {
     system: systemPrompt(ctx),
     user: `<syllabus>\n${clipped.replaceAll('</syllabus>', '')}\n</syllabus>`,
     schemaName: 'syllabus_deadlines',
