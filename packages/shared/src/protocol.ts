@@ -21,6 +21,7 @@ export const AGENT_MESSAGE_TYPES = [
   'reminder.due',
   'routine.due',
   'review.weekly',
+  'followup.draft',
 ] as const;
 
 export const AgentMessageType = z.enum(AGENT_MESSAGE_TYPES);
@@ -151,7 +152,15 @@ export const ReviewWeeklyMessage = z.object({
     .default({ trigger: 'cron' }),
 });
 
+/** "Draft a nudge": write a short follow-up as a Gmail draft in that thread. Never sent. */
+export const FollowupDraftMessage = z.object({
+  ...base,
+  type: z.literal('followup.draft'),
+  payload: z.object({ threadId: z.string().min(1).max(100) }),
+});
+
 export const AgentMessage = z.discriminatedUnion('type', [
+  FollowupDraftMessage,
   RoutineDueMessage,
   ReminderDueMessage,
   ReviewWeeklyMessage,

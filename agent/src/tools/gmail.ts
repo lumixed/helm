@@ -142,10 +142,84 @@ export class GmailState {
   }
 }
 
+/**
+ * Mail the person SENT between two times ("waiting on" follow-ups). Newest first, with threads.
+ */
+export async function listSent(
+  token: string,
+  afterEpochS: number,
+  beforeEpochS: number,
+  max = 15,
+  f: Fetch = fetch,
+): Promise<{ id: string; threadId: string }[]> {
+  const q = `in:sent after:${afterEpochS} before:${beforeEpochS}`;
+  const res = await f(`${GMAIL}/messages?maxResults=${max}&q=${encodeURIComponent(q)}`, {
+    headers: { authorization: `Bearer ${token}` },
+    signal: AbortSignal.timeout(15_000),
+  });
+  if (!res.ok) throw new GmailError(res.status === 401 ? 'auth' : 'api');
+  return ((await res.json()) as { messages?: { id: string; threadId: string }[] }).messages ?? [];
+}
+
+export interface ThreadMessage {
+  id: string;
+  from: string;
+  to: string;
+  subject: string;
+  messageId: string;
+  at: number;
+}
+
+/** A thread's messages, headers only (no bodies), oldest first. */
+export async function threadMessages(
+  token: string,
+  threadId: string,
+  f: Fetch = fetch,
+): Promise<ThreadMessage[]> {
+  const hs = ['From', 'To', 'Subject', 'Message-ID'].map((h) => `metadataHeaders=${h}`).join('&');
+  const res = await f(`${GMAIL}/threads/${encodeURIComponent(threadId)}?format=metadata&${hs}`, {
+    headers: { authorization: `Bearer ${token}` },
+    signal: AbortSignal.timeout(15_000),
+  });
+  if (!res.ok) throw new GmailError('api');
+  const t = (await res.json()) as {
+    messages?: { id: string; internalDate?: string; payload?: Part }[];
+  };
+  return (t.messages ?? [])
+    .map((m) => {
+      const h = (n: string) =>
+        m.payload?.headers?.find((x) => x.name.toLowerCase() === n)?.value ?? '';
+      return {
+        id: m.id,
+        from: h('from'),
+        to: h('to'),
+        subject: h('subject'),
+        messageId: h('message-id'),
+        at: Number(m.internalDate ?? 0),
+      };
+    })
+    .sort((a, b) => a.at - b.at);
+}
+
+/** "Maya <maya@x.edu>" → "maya@x.edu" (lower case), for comparing senders. */
+export const addressOf = (h: string) => (/<([^>]+)>/.exec(h)?.[1] ?? h).trim().toLowerCase();
+
 /** RFC 2822 message, base64url: what the Gmail API takes for a draft. */
-export function rawMessage(d: { to?: string | null; subject: string; body: string }): string {
+export function rawMessage(d: {
+  to?: string | null;
+  subject: string;
+  body: string;
+  /** Message-ID being replied to: the draft joins that thread in the person's mail app. */
+  inReplyTo?: string;
+}): string {
   const headers = [
     ...(d.to ? [`To: ${d.to.replace(/[\r\n]/g, '')}`] : []),
+    ...(d.inReplyTo
+      ? [
+          `In-Reply-To: ${d.inReplyTo.replace(/[\r\n]/g, '')}`,
+          `References: ${d.inReplyTo.replace(/[\r\n]/g, '')}`,
+        ]
+      : []),
     `Subject: =?UTF-8?B?${Buffer.from(d.subject.replace(/[\r\n]/g, ' ')).toString('base64')}?=`,
     'MIME-Version: 1.0',
     'Content-Type: text/plain; charset="UTF-8"',
@@ -161,13 +235,22 @@ export function rawMessage(d: { to?: string | null; subject: string; body: strin
  */
 export async function createDraft(
   token: string,
-  d: { to?: string | null; subject: string; body: string },
+  d: {
+    to?: string | null;
+    subject: string;
+    body: string;
+    /** Put the draft in this thread (a follow-up), replying to inReplyTo. */
+    threadId?: string;
+    inReplyTo?: string;
+  },
   f: Fetch = fetch,
 ): Promise<{ id: string }> {
   const res = await f(`${GMAIL}/drafts`, {
     method: 'POST',
     headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
-    body: JSON.stringify({ message: { raw: rawMessage(d) } }),
+    body: JSON.stringify({
+      message: { raw: rawMessage(d), ...(d.threadId ? { threadId: d.threadId } : {}) },
+    }),
     signal: AbortSignal.timeout(15_000),
   });
   if (res.status === 403) throw new GmailError('auth');

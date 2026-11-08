@@ -72,6 +72,8 @@ async function setup(opts: {
         opts.gmail
           ? {
               listNew: async () => [],
+              listSent: async () => [],
+              thread: async () => [],
               get: async () => {
                 throw new Error('unused');
               },

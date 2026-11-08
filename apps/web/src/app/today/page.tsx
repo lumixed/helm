@@ -19,6 +19,8 @@ import { listSubmissions } from '@/lib/submissions';
 import { llmPausedThisMonth } from '@/lib/limits';
 import { reminderViews } from '@/lib/reminders';
 import { latestWeeklyReview } from '@/lib/week';
+import { openWaiting } from '@/lib/waiting';
+import { WaitingCard } from '@/components/WaitingCard';
 
 export const dynamic = 'force-dynamic';
 
@@ -37,7 +39,7 @@ export default async function TodayPage({
   if (!user.onboarded) redirect('/setup');
   const db = await getDb();
   const fullUser = (await currentUser())!;
-  const [confirmed, pending, brief, changes, submissions, paused, reminders, week] =
+  const [confirmed, pending, brief, changes, submissions, paused, reminders, week, waiting] =
     await Promise.all([
       listAssignments(db, user.id, user.timezone, { review: false }),
       listAssignments(db, user.id, user.timezone, { review: true }),
@@ -47,6 +49,7 @@ export default async function TodayPage({
       llmPausedThisMonth(db, user.id),
       reminderViews(db, fullUser),
       latestWeeklyReview(db, user.id),
+      openWaiting(db, user.id),
     ]);
   const pickable = confirmed
     .filter((a) => a.status === 'todo' || a.status === 'in_progress')
@@ -173,6 +176,19 @@ export default async function TodayPage({
             ))}
           </ul>
         </Card>
+      )}
+
+      {waiting.length > 0 && (
+        <WaitingCard
+          rows={waiting.map((w) => ({
+            id: w.id,
+            summary: w.summary,
+            toName: w.toName,
+            subject: w.subject,
+            daysAgo: Math.max(1, Math.floor((now.getTime() - w.sentAt.getTime()) / 86_400_000)),
+            drafted: Boolean(w.draftedAt),
+          }))}
+        />
       )}
 
       {week && Date.now() - week.createdAt.getTime() < 3 * 86_400_000 && (

@@ -13,3 +13,4 @@ export * from './ics';
 export * from './reminders';
 export * from './routines';
 export * from './review';
+export * from './followups';

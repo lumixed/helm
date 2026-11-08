@@ -526,3 +526,27 @@ export const weeklyReviews = pgTable(
   (t) => [uniqueIndex('weekly_reviews_user_week_uq').on(t.userId, t.weekEnding)],
 );
 export type WeeklyReview = typeof weeklyReviews.$inferSelect;
+
+/**
+ * "Waiting on": mail the person sent that asked for something and got no reply. Found by their
+ * agent in Gmail; Helm keeps only the thread id, who it went to, the subject and one line.
+ */
+export const waitingOn = pgTable(
+  'waiting_on',
+  {
+    id: id(),
+    userId: userRef(),
+    threadId: text('thread_id').notNull(),
+    toName: text('to_name').notNull(),
+    subject: text('subject').notNull(),
+    summary: text('summary').notNull(),
+    sentAt: timestamp('sent_at', { withTimezone: true }).notNull(),
+    /** open | replied | dismissed */
+    status: text('status').notNull().default('open'),
+    /** When the agent saved a follow-up draft in Gmail. */
+    draftedAt: timestamp('drafted_at', { withTimezone: true }),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex('waiting_on_user_thread_uq').on(t.userId, t.threadId)],
+);
+export type WaitingOn = typeof waitingOn.$inferSelect;
