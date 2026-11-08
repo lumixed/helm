@@ -98,6 +98,9 @@ function fakeMaritime() {
     async reloadEnv() {
       state.reloads++;
     },
+    async deleteEnv(id, key) {
+      state.env.delete(`${id}:${key}`);
+    },
     async testNetwork(_id, destination) {
       return { destination, reached: false, reason: 'Refused by the internet policy.' };
     },

@@ -7,6 +7,8 @@ import { BriefCard } from '@/components/BriefCard';
 import { ChangesCard } from '@/components/ChangesCard';
 import { ShareMessage } from '@/components/ShareMessage';
 import { TelegramCard } from '@/components/TelegramCard';
+import { GmailCard } from '@/components/GmailCard';
+import { gmailConfig } from '@/lib/gmail';
 import { telegramToken } from '@/lib/telegram';
 import { SubmissionAlerts } from '@/components/SubmissionsBoard';
 import { listSubmissions } from '@/lib/submissions';
@@ -21,7 +23,12 @@ import { requireProfile } from '@/lib/page-data';
 
 export const dynamic = 'force-dynamic';
 
-export default async function TodayPage() {
+export default async function TodayPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ gmail?: string }>;
+}) {
+  const { gmail } = await searchParams;
   const { user, agent } = await requireProfile();
   if (!user.onboarded) redirect('/setup');
   const db = await getDb();
@@ -142,6 +149,7 @@ export default async function TodayPage() {
         </Link>
       </p>
       <ShareMessage templates={demo ? demoEmailTemplates(confirmed, user.timezone, now) : []} />
+      {gmailConfig() && <GmailCard address={fullUser.gmailAddress} result={gmail} />}
       {telegramToken() && <TelegramCard linked={user.telegramLinked} />}
       <details className="text-sm">
         <summary className="min-h-11 cursor-pointer py-2 font-medium">

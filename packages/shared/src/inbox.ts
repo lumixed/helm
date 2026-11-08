@@ -119,6 +119,22 @@ export const EmailChange = z.object({
 });
 export type EmailChange = z.infer<typeof EmailChange>;
 
+/**
+ * Agent → backend: register an email the agent read from Gmail itself. Only metadata and a hash;
+ * the body stays on the agent's VM. Returns the inbox message id for InboxResultRequest.
+ */
+export const AgentInboxMessageRequest = z.object({
+  studentId: z.string().min(1).max(128),
+  source: MessageSource,
+  /** Gmail message id, so the same email is registered once. */
+  externalId: z.string().min(1).max(200),
+  from: z.string().max(320),
+  subject: z.string().max(1000),
+  receivedAt: z.iso.datetime({ offset: true }),
+  bodySha256: z.string().regex(/^[0-9a-f]{64}$/),
+});
+export type AgentInboxMessageRequest = z.infer<typeof AgentInboxMessageRequest>;
+
 /** Agent → backend: what one email means. Never contains the email body. */
 export const InboxResultRequest = z.object({
   studentId: z.string().min(1).max(128),

@@ -67,6 +67,9 @@ export const users = pgTable(
     briefTimeLocal: text('brief_time_local').notNull().default('07:30'),
     channel: channelEnum('channel').notNull().default('in_app'),
     telegramChatId: text('telegram_chat_id'),
+    /** Gmail address connected read-only. The token itself lives only in the agent's encrypted env. */
+    gmailAddress: text('gmail_address'),
+    gmailConnectedAt: timestamp('gmail_connected_at', { withTimezone: true }),
     onboardedAt: timestamp('onboarded_at', { withTimezone: true }),
     createdAt: createdAt(),
   },

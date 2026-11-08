@@ -19,6 +19,9 @@ export function egressAllowlist(env: NodeJS.ProcessEnv = process.env): string[] 
   for (const h of (env.EGRESS_LLM_HOSTS ?? 'generativelanguage.googleapis.com').split(','))
     if (h.trim()) hosts.add(h.trim());
   for (const h of (env.EGRESS_ALLOWLIST ?? '').split(',')) if (h.trim()) hosts.add(h.trim());
+  // Read-only Gmail (PRD v3): only Google's token endpoint and the Gmail API, nothing else.
+  if (env.GOOGLE_CLIENT_ID)
+    for (const h of ['oauth2.googleapis.com', 'gmail.googleapis.com']) hosts.add(h);
   return [...hosts].sort();
 }
 

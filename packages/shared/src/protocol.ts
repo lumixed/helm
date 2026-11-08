@@ -16,6 +16,7 @@ export const AGENT_MESSAGE_TYPES = [
   'submission.hold_notice',
   'submission.run',
   'redteam.egress',
+  'gmail.sync',
 ] as const;
 
 export const AgentMessageType = z.enum(AGENT_MESSAGE_TYPES);
@@ -99,7 +100,19 @@ export const RedteamEgressMessage = z.object({
   payload: z.object({ url: z.url().refine((u) => u.startsWith('https://'), 'https only') }),
 });
 
+/** Check the person's Gmail now (read-only; the token lives only in this agent's encrypted env). */
+export const GmailSyncMessage = z.object({
+  ...base,
+  type: z.literal('gmail.sync'),
+  payload: z
+    .object({ reason: z.enum(['connected', 'manual', 'heartbeat']).default('manual') })
+    .default({
+      reason: 'manual',
+    }),
+});
+
 export const AgentMessage = z.discriminatedUnion('type', [
+  GmailSyncMessage,
   RedteamEgressMessage,
   PingMessage,
   BriefGenerateMessage,

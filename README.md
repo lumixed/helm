@@ -1,17 +1,22 @@
 # Helm
 
-**A private deadline agent for every student.** Each student gets their own Helm agent in an isolated
-[Maritime](https://maritime.sh) micro-VM. It plans their day, watches email for deadline changes, and
-submits their finished work on time with a last-chance hold and a receipt.
+**A private assistant for everyone.** Each person gets their own Helm agent in an isolated
+[Maritime](https://maritime.sh) micro-VM. It reads their Gmail (read-only) and the messages they share
+from WhatsApp, Instagram or texts, keeps one list of everything they owe and when, tells them every
+morning what to do today (in the app and on Telegram), and hands in routine things for them with a
+last-chance hold and a receipt.
 
-Built at HackCamp 2026. Full spec: [`docs/PRD.md`](docs/PRD.md).
+Built at HackCamp 2026. Specs: [`docs/PRD.md`](docs/PRD.md) (v1),
+[`docs/PRD-v2-maritime.md`](docs/PRD-v2-maritime.md) (Maritime-first),
+[`docs/PRD-v3-pivot.md`](docs/PRD-v3-pivot.md) (for everyone; wins where they conflict).
 
-> **Status (2026-11-07):** on Maritime with one agent per student. Working: syllabus intake and review,
-> morning brief (platform cron), email change detection with provenance (M6), scheduled submission
-> to a demo portal with hold notice, retries, receipts and alerts (M7), agent timeline with Maritime
-> lifecycle webhooks, and a per-agent egress allowlist. Not built yet: policy panel, `/maritime`
-> scorecard, sandbox parsing, desktop submission. See [`docs/audit-v1.md`](docs/audit-v1.md) and
-> [`docs/maritime-notes.md`](docs/maritime-notes.md).
+> **Status (2026-11-07):** on Maritime with one agent per person. Working: any document with dates →
+> review → plan; morning brief (platform cron) in the app and on Telegram; changes detected in email
+> and shared messages with provenance; scheduled hand-ins to a demo portal with hold notice, retries,
+> receipts and alerts; read-only Gmail with the token only in the agent's encrypted env; installable
+> app with a share target; timeline with Maritime lifecycle webhooks; per-agent egress allowlist.
+> Not built yet: policy panel, `/maritime` scorecard, sandbox parsing, desktop hand-ins.
+> Helm does not read WhatsApp or Instagram by itself: people share messages with it.
 
 ## Layout
 

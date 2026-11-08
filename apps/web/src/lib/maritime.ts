@@ -76,6 +76,7 @@ export interface MaritimeClient {
   setEnv(agentId: string, key: string, value: string, secret: boolean): Promise<void>;
   /** Hot-reload saved env into the running agent (falls back to a restart). */
   reloadEnv(agentId: string): Promise<void>;
+  deleteEnv(agentId: string, key: string): Promise<void>;
   getNetwork(agentId: string): Promise<AgentNetwork>;
   putNetwork(
     agentId: string,
@@ -249,6 +250,9 @@ export function createMaritimeClient(opts: {
     },
     async reloadEnv(agentId) {
       await call('POST', `/api/agents/${enc(agentId)}/reload-env`);
+    },
+    async deleteEnv(agentId, key) {
+      await call('DELETE', `/api/agents/${enc(agentId)}/env/${enc(key)}`);
     },
   };
 }

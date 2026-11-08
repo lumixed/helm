@@ -27,7 +27,18 @@ import {
 import { DocumentError, readDocumentText, resolveInside } from './tools/read-document';
 import { createHash } from 'node:crypto';
 import fs from 'node:fs/promises';
+import path from 'node:path';
 import { httpDriver, portalCredsFromEnv, type SubmissionDriver } from './tools/portal-http';
+import {
+  GmailError,
+  GmailState,
+  accessToken,
+  getEmail,
+  gmailCredsFromEnv,
+  listRecent,
+  type GmailCreds,
+  type GmailEmail,
+} from './tools/gmail';
 import type { Emitter } from './emit';
 import type { Dedupe } from './dedupe';
 
@@ -54,6 +65,22 @@ export interface HandlerDeps {
   /** The submission driver, or null when this agent has no portal login. */
   driver: () => SubmissionDriver | null;
   readFile: (absPath: string) => Promise<Uint8Array>;
+  /** Read-only Gmail, or null when not connected. */
+  gmail: () => GmailReader | null;
+}
+
+export interface GmailReader {
+  listNew(afterEpochS: number): Promise<string[]>;
+  get(id: string): Promise<GmailEmail>;
+}
+
+function gmailReader(c: GmailCreds): GmailReader {
+  let token: string | null = null;
+  const t = async () => (token ??= await accessToken(c));
+  return {
+    listNew: async (after) => listRecent(await t(), after, 10),
+    get: async (id) => getEmail(await t(), id),
+  };
 }
 
 const defaultDeps = (): HandlerDeps => ({
@@ -87,6 +114,10 @@ const defaultDeps = (): HandlerDeps => ({
     return creds ? httpDriver(creds) : null;
   },
   readFile: async (p) => new Uint8Array(await fs.readFile(p)),
+  gmail: () => {
+    const c = gmailCredsFromEnv();
+    return c ? gmailReader(c) : null;
+  },
 });
 
 const WAKE_REASONS: Record<AgentMessage['type'], string> = {
@@ -98,6 +129,7 @@ const WAKE_REASONS: Record<AgentMessage['type'], string> = {
   'submission.hold_notice': 'Woke to send a last-chance hold notice',
   'submission.run': 'Woke to submit homework',
   'redteam.egress': 'Woke for a red-team simulation',
+  'gmail.sync': 'Woke to check your Gmail',
 };
 
 /**
@@ -150,8 +182,15 @@ export async function handleMessage(msg: AgentMessage, ctx: HandlerContext): Pro
       reply = await handleRedteam(msg, requestId, woke, ctx);
       break;
     }
+    case 'gmail.sync': {
+      reply = await handleGmailSync(msg.payload.reason, requestId, woke, ctx);
+      break;
+    }
     case 'heartbeat': {
       reply = await handleHeartbeat(ctx);
+      // The heartbeat is also when new Gmail is read (quietly unless something arrived).
+      if ((ctx.deps?.gmail ?? defaultDeps().gmail)())
+        reply += ` | ${await handleGmailSync('heartbeat', requestId, woke, ctx)}`;
       // Stays off the timeline unless the safety net found something to do.
       ctx.dedupe.add(requestId);
       return reply;
@@ -305,8 +344,18 @@ async function handleInbox(
   woke: ReturnType<Emitter['event']>,
   ctx: HandlerContext,
 ): Promise<string> {
+  return processMessage(msg.payload, requestId, woke, ctx);
+}
+
+/** One message (shared, or read from Gmail): classify as data, let the backend's rule decide. */
+async function processMessage(
+  payload: Extract<AgentMessage, { type: 'inbox.message' }>['payload'],
+  requestId: string,
+  woke: ReturnType<Emitter['event']>,
+  ctx: HandlerContext,
+): Promise<string> {
   const deps = { ...defaultDeps(), ...ctx.deps };
-  const { inboxMessageId, source, from, subject, receivedAt, body } = msg.payload;
+  const { inboxMessageId, source, from, subject, receivedAt, body } = payload;
   const sender = senderName(from);
   const what = SOURCE_LABEL[source];
   const fail = async (reason: string, detail?: string) => {
@@ -757,4 +806,101 @@ async function handleSubmissionRun(
     }),
   );
   return `submitted ${result.receipt.confirmationId}`;
+}
+
+/**
+ * Read new Gmail (read-only) and run each email through the same path as a shared message.
+ * Bodies stay on this VM: the backend gets sender, subject, time, a hash and the result.
+ */
+async function handleGmailSync(
+  reason: 'connected' | 'manual' | 'heartbeat',
+  requestId: string,
+  woke: ReturnType<Emitter['event']>,
+  ctx: HandlerContext,
+): Promise<string> {
+  const deps = { ...defaultDeps(), ...ctx.deps };
+  const quiet = reason === 'heartbeat';
+  const note = async (
+    text: string,
+    type: 'inbox.classified' | 'agent.error' = 'inbox.classified',
+  ) => {
+    if (quiet && type !== 'agent.error') return text;
+    await ctx.emitter.emit(
+      woke,
+      ctx.emitter.event({
+        eventId: `${requestId}:gmail`,
+        requestId,
+        type,
+        reason: text,
+        payload: { source: 'gmail', reason },
+      }),
+    );
+    return text;
+  };
+  const gmail = deps.gmail();
+  if (!gmail) return quiet ? 'gmail: not connected' : note('Gmail is not connected to this agent.');
+  const store = new GmailState(path.join(deps.dataDir, 'gmail', 'state.json'));
+  const state = await store.load();
+  const nowS = Math.floor(deps.now().getTime() / 1000);
+  // First sync looks back 2 days; later syncs overlap by an hour (ids dedupe).
+  const after = state.lastSyncS ? state.lastSyncS - 3600 : nowS - 2 * 86_400;
+  let ids: string[];
+  try {
+    ids = await gmail.listNew(after);
+  } catch (err) {
+    const revoked = err instanceof GmailError && err.kind === 'revoked';
+    return note(
+      revoked
+        ? 'Gmail access was removed in your Google account. Connect Gmail again in Helm.'
+        : `Couldn't check Gmail (${String(err).slice(0, 120)}).`,
+      'agent.error',
+    );
+  }
+  const fresh = ids
+    .filter((id) => !state.seen.includes(id))
+    .reverse()
+    .slice(0, 8);
+  let handled = 0;
+  for (const id of fresh) {
+    let email: GmailEmail;
+    try {
+      email = await gmail.get(id);
+    } catch {
+      continue;
+    }
+    const reg = await deps.post('/api/agent/inbox/message', {
+      studentId: runtime().studentId,
+      source: 'email',
+      externalId: id,
+      from: email.from,
+      subject: email.subject,
+      receivedAt: email.receivedAt,
+      bodySha256: createHash('sha256').update(email.body).digest('hex'),
+    });
+    if (!reg.ok) continue;
+    const { inboxMessageId, alreadyProcessed } = (await reg.json()) as {
+      inboxMessageId: string;
+      alreadyProcessed: boolean;
+    };
+    state.seen.push(id);
+    if (alreadyProcessed) continue;
+    await processMessage(
+      {
+        inboxMessageId,
+        source: 'email',
+        from: email.from,
+        subject: email.subject,
+        receivedAt: email.receivedAt,
+        body: email.body,
+      },
+      `gmail:${id}`,
+      woke,
+      ctx,
+    );
+    handled++;
+  }
+  state.lastSyncS = nowS;
+  await store.save(state);
+  if (handled === 0) return note('Checked your Gmail: nothing new.');
+  return `gmail: read ${handled} new email${handled === 1 ? '' : 's'}`;
 }
