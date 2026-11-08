@@ -1,5 +1,7 @@
 packages:
   - apps/*
+  # The Expo app uses npm on its own (Metro and pnpm symlinks don't mix well).
+  - '!apps/mobile'
   - agent
   - packages/*
 onlyBuiltDependencies:

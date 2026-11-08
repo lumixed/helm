@@ -13,3 +13,5 @@ agent/data/
 .DS_Store
 agent/.deploy/
 apps/web/next-env.d.ts
+apps/mobile/.expo/
+apps/mobile/dist/

@@ -1,0 +1,51 @@
+{
+  "expo": {
+    "name": "Helm",
+    "slug": "helm",
+    "scheme": "helm",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "backgroundColor": "#f4f5f7",
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "app.helm.assistant",
+      "infoPlist": {
+        "UIBackgroundModes": ["remote-notification"]
+      }
+    },
+    "android": {
+      "package": "app.helm.assistant",
+      "adaptiveIcon": {
+        "backgroundColor": "#0b1220",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#f4f5f7",
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 120
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "color": "#0b1220"
+        }
+      ]
+    ],
+    "extra": {
+      "helmUrl": "https://helm-pi-fawn.vercel.app"
+    }
+  }
+}

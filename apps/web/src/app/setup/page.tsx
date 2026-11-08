@@ -4,6 +4,7 @@ import { MessagingAppsCard } from '@/components/MessagingAppsCard';
 import { computersFromEnv } from '@/lib/computers';
 import { listApps } from '@/lib/desktop';
 import { eq } from 'drizzle-orm';
+import { headers } from 'next/headers';
 import { LimitsCard } from '@/components/LimitsCard';
 import { getDb, schema } from '@/db';
 import { policySummary } from '@/lib/limits';
@@ -33,6 +34,8 @@ export default async function SetupPage({
     .from(schema.agents)
     .where(eq(schema.agents.userId, full.id));
   const limits = user.onboarded ? await policySummary(full, agentRow ?? null) : null;
+  // Inside the Helm phone app there is nothing to install.
+  const inApp = ((await headers()).get('user-agent') ?? '').includes('HelmApp/');
   return (
     <Shell
       title={user.onboarded ? 'Settings' : 'Set up Helm'}
@@ -59,18 +62,20 @@ export default async function SetupPage({
             <MessagingAppsCard initial={await listApps(await getDb(), full)} />
           )}
           {telegramToken() && <TelegramCard linked={user.telegramLinked} />}
-          <Card>
-            <details>
-              <summary className="cursor-pointer text-[17px] font-semibold tracking-tight text-ink">
-                Put Helm on your phone&apos;s home screen
-              </summary>
-              <p className="mt-3 text-sm text-ink-soft">
-                iPhone: open Helm in Safari, tap Share, then <strong>Add to Home Screen</strong>.
-                Android: open the Chrome menu, then <strong>Install app</strong>. On Android you can
-                then share any message to Helm from the share sheet.
-              </p>
-            </details>
-          </Card>
+          {!inApp && (
+            <Card>
+              <details>
+                <summary className="cursor-pointer text-[17px] font-semibold tracking-tight text-ink">
+                  Put Helm on your phone&apos;s home screen
+                </summary>
+                <p className="mt-3 text-sm text-ink-soft">
+                  iPhone: open Helm in Safari, tap Share, then <strong>Add to Home Screen</strong>.
+                  Android: open the Chrome menu, then <strong>Install app</strong>. On Android you
+                  can then share any message to Helm from the share sheet.
+                </p>
+              </details>
+            </Card>
+          )}
         </section>
       )}
 
