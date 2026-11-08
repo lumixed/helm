@@ -79,6 +79,11 @@ export interface MaritimeClient {
   /** Hot-reload saved env into the running agent (falls back to a restart). */
   reloadEnv(agentId: string): Promise<void>;
   deleteEnv(agentId: string, key: string): Promise<void>;
+  /** Short-lived eu_ token that opens only this end user's agent, for the given scopes. */
+  mintToken(
+    externalId: string,
+    params: { scopes: ('chat' | 'files')[]; ttlSeconds: number },
+  ): Promise<{ token: string; agentId: string; expiresAt: string }>;
   getNetwork(agentId: string): Promise<AgentNetwork>;
   putNetwork(
     agentId: string,
@@ -252,6 +257,15 @@ export function createMaritimeClient(opts: {
     },
     async reloadEnv(agentId) {
       await call('POST', `/api/agents/${enc(agentId)}/reload-env`);
+    },
+    async mintToken(externalId, params) {
+      return (
+        await call<{ token: string; agentId: string; expiresAt: string }>(
+          'POST',
+          `/api/v1/end-users/${enc(externalId)}/tokens`,
+          params,
+        )
+      ).data;
     },
     async deleteEnv(agentId, key) {
       await call('DELETE', `/api/agents/${enc(agentId)}/env/${enc(key)}`);

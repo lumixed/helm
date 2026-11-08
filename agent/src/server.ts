@@ -9,7 +9,7 @@ import {
 import { config, runtime } from './config';
 import { Emitter } from './emit';
 import { Dedupe } from './dedupe';
-import { handleMessage, type HandlerDeps } from './handlers';
+import { handleChat, handleMessage, type HandlerDeps } from './handlers';
 
 export function buildSchedules(): ScheduleEntry[] {
   const rt = runtime();
@@ -104,10 +104,21 @@ export function createApp(
     }
 
     if (inbound.kind === 'text') {
-      // S2 (chat) comes later. Free text never triggers actions.
-      return c.json({
-        response: "Hi, I'm Helm. Chat isn't wired up yet; open the Helm app for your plan.",
+      // In-app chat (PRD S2): answered from the person's own plan; read-only.
+      const conversationId = body.data.conversation_id ?? body.data.conversationId ?? 'default';
+      const answer = handleChat(inbound.text, conversationId, {
+        emitter,
+        dedupe,
+        source,
+        deps: deps.handlerDeps,
       });
+      const got = await Promise.race([
+        answer,
+        new Promise<null>((r) => setTimeout(() => r(null), config.replyBudgetMs)),
+      ]).catch(() => null);
+      if (got === null)
+        answer.catch((err: unknown) => console.error('[chat] late answer failed', err));
+      return c.json({ response: got ?? 'Still thinking about that. Ask me again in a moment.' });
     }
 
     const work = handleMessage(inbound.message, {

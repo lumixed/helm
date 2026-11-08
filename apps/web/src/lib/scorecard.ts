@@ -317,18 +317,41 @@ export async function buildScorecard(
     ],
   });
 
-  // 6. Files API (+ scoped tokens, not built).
+  // 6. Files API + scoped tokens (chat).
   const uploads = events.filter((e) => e.type === 'intake.parsed').length;
+  const mints = await db
+    .select({ at: schema.maritimeEvents.occurredAt })
+    .from(schema.maritimeEvents)
+    .where(
+      and(
+        eq(schema.maritimeEvents.userId, user.id),
+        eq(schema.maritimeEvents.kind, 'helm.token_minted'),
+      ),
+    )
+    .orderBy(desc(schema.maritimeEvents.occurredAt))
+    .limit(200);
   rows.push({
     id: 'files',
     feature: 'Files API and scoped tokens',
     how: 'Documents go straight to the person’s agent; the app keeps only the dates it finds.',
-    status: uploads > 0 ? 'partial' : 'not_active',
+    status:
+      uploads > 0 && mints.length > 0
+        ? 'active'
+        : uploads > 0 || mints.length > 0
+          ? 'partial'
+          : 'not_active',
     evidence: [
       { label: 'Documents read by the agent', value: String(uploads) },
-      { label: 'Short-lived browser tokens (eu_)', value: 'not active' },
+      {
+        label: 'Short-lived chat tokens (eu_)',
+        value: mints.length
+          ? `${mints.length} minted · chat only · last ${when(mints[0]!.at.getTime())}`
+          : 'none yet',
+      },
     ],
-    note: 'Direct browser-to-agent chat with scoped tokens is not built yet.',
+    note: mints.length
+      ? 'Chat tokens open only this person’s agent and expire in minutes. Where Maritime doesn’t allow this site’s address for browsers, Helm relays chat with the same kind of token.'
+      : 'Open Ask to chat with your agent; a short-lived token is minted per session.',
   });
 
   // 7. Policy caps.

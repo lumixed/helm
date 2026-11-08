@@ -2,10 +2,19 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { HelmMark, IconAdd, IconHandIn, IconSettings, IconTimeline, IconToday } from './icons';
+import {
+  HelmMark,
+  IconAdd,
+  IconAsk,
+  IconHandIn,
+  IconSettings,
+  IconTimeline,
+  IconToday,
+} from './icons';
 
 const ITEMS = [
   { href: '/today', label: 'Today', Icon: IconToday },
+  { href: '/chat', label: 'Ask', Icon: IconAsk },
   { href: '/intake', label: 'Add', Icon: IconAdd },
   { href: '/submissions', label: 'Hand in', Icon: IconHandIn },
   { href: '/timeline', label: 'Timeline', Icon: IconTimeline },

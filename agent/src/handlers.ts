@@ -26,6 +26,7 @@ import {
 } from './tools/classify-email';
 import { DocumentError, readDocumentText, resolveInside } from './tools/read-document';
 import { SandboxUnavailable, parseInSandbox } from './tools/sandbox-parse';
+import { ChatMemory, chatReply, type ChatReply, type ChatTurn } from './tools/chat';
 
 export interface DocumentRead {
   text: string;
@@ -80,6 +81,13 @@ export interface HandlerDeps {
   /** The submission driver, or null when this agent has no portal login. */
   driver: () => SubmissionDriver | null;
   readFile: (absPath: string) => Promise<Uint8Array>;
+  /** Answer one chat message from the person (read-only). */
+  chat: (
+    text: string,
+    state: AgentState,
+    history: ChatTurn[],
+    now: Date,
+  ) => Promise<ChatReply & { model: string }>;
   /** Read-only Gmail, or null when not connected. */
   gmail: () => GmailReader | null;
 }
@@ -149,6 +157,13 @@ const defaultDeps = (): HandlerDeps => ({
     );
     return { summary: r.data.summary, writer: r.model };
   },
+  chat: (text, state, history, now) =>
+    chatReply(text, state, history, now, (req) =>
+      llmJson(
+        llmChainFromEnv().map((o) => ({ ...o, timeoutMs: 15_000 })),
+        req,
+      ),
+    ),
   now: () => new Date(),
   dataDir: DATA_DIR,
   driver: () => {
@@ -962,4 +977,74 @@ async function handleGmailSync(
   await store.save(state);
   if (handled === 0) return note('Checked your Gmail: nothing new.');
   return `gmail: read ${handled} new email${handled === 1 ? '' : 's'}`;
+}
+
+/**
+ * A free-text message from the person (in-app chat, PRD S2 / WP-2). Read-only: answers from their
+ * own plan, remembers the last turns on /data, and can start a fresh brief. The timeline records
+ * that a question was answered, never the text.
+ */
+export async function handleChat(
+  text: string,
+  conversationId: string,
+  ctx: HandlerContext,
+): Promise<string> {
+  const deps = { ...defaultDeps(), ...ctx.deps };
+  const started = Date.now();
+  let state: AgentState;
+  try {
+    const res = await deps.get('/api/agent/state');
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    state = AgentState.parse(await res.json());
+  } catch {
+    return "I can't reach your plan right now. Try again in a moment.";
+  }
+  const memory = new ChatMemory(path.join(deps.dataDir, 'memory'));
+  const history = await memory.load(conversationId);
+  let r: ChatReply & { model: string };
+  try {
+    r = await deps.chat(text, state, history, deps.now());
+  } catch {
+    return "Sorry, I couldn't think that through just now. Try again in a moment.";
+  }
+  const at = deps.now().toISOString();
+  await memory.append(conversationId, [
+    { role: 'user', text: text.slice(0, 2000), at },
+    { role: 'assistant', text: r.reply, at },
+  ]);
+  const requestId = `chat:${Date.now()}`;
+  const woke = ctx.emitter.event({
+    eventId: `${requestId}:woke`,
+    requestId,
+    type: 'agent.woke',
+    reason: 'Woke to answer you in chat',
+    payload: { source: ctx.source },
+  });
+  await ctx.emitter.emit(
+    woke,
+    ctx.emitter.event({
+      eventId: `${requestId}:replied`,
+      requestId,
+      type: 'chat.replied',
+      reason:
+        r.intent === 'brief'
+          ? 'Answered you in chat and started a fresh brief'
+          : 'Answered a question in chat',
+      payload: { intent: r.intent, model: r.model, ms: Date.now() - started },
+    }),
+  );
+  if (r.intent === 'brief')
+    void handleBrief(
+      {
+        v: 1,
+        type: 'brief.generate',
+        requestId: `${requestId}:brief`,
+        studentId: state.studentId,
+        payload: { trigger: 'manual' },
+      },
+      `${requestId}:brief`,
+      woke,
+      ctx,
+    ).catch((err: unknown) => console.error('[chat] brief failed', err));
+  return r.reply;
 }

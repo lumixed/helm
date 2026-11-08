@@ -12,6 +12,7 @@ export const AGENT_EVENT_TYPES = [
   'intake.parsed',
   'brief.generated',
   'brief.failed',
+  'chat.replied',
   'inbox.classified',
   'change.detected',
   'change.applied',

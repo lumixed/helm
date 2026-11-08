@@ -112,3 +112,9 @@ export const IconBolt = (p: SVGProps<SVGSVGElement>) => (
     <path d="M13 2 4 14h7l-1 8 9-12h-7z" />
   </Icon>
 );
+export const IconAsk = (p: SVGProps<SVGSVGElement>) => (
+  <Icon {...p}>
+    <path d="M20 12a8 8 0 0 1-11.6 7.1L4 20l.9-4.4A8 8 0 1 1 20 12Z" />
+    <path d="M9 11h6M9 14h4" />
+  </Icon>
+);

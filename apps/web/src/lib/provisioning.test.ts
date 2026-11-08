@@ -98,6 +98,9 @@ function fakeMaritime() {
     async reloadEnv() {
       state.reloads++;
     },
+    async mintToken(ext) {
+      return { token: `eu_test_${ext}`, agentId: 'mt_1', expiresAt: '2026-11-08T00:15:00Z' };
+    },
     async deleteEnv(id, key) {
       state.env.delete(`${id}:${key}`);
     },
