@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { SubmissionView } from '@/lib/submissions';
 import { SubmissionItem } from './SubmissionItem';
-import { Button, Card, Field, inputClass } from './ui';
+import { Button, Card, Chip, Field, inputClass, demoCardClass, fileInputClass } from './ui';
 
 interface Option {
   id: string;
@@ -77,7 +77,7 @@ export function SubmissionsBoard({
   return (
     <>
       <Card>
-        <h2 className="text-lg font-semibold">Let Helm hand it in</h2>
+        <h2 className="text-[17px] font-semibold tracking-tight text-ink">Let Helm hand it in</h2>
         <p className="mt-1 text-sm">
           Homework, an application, a form for work: anything you hand in on a website. Helm never
           edits it. It checks the file, waits for your OK, and hands it in on time with a receipt.
@@ -116,7 +116,7 @@ export function SubmissionsBoard({
                   : 'Up to 4 MB.'
               }
             >
-              <input id="sub-file" name="file" type="file" required className={inputClass} />
+              <input id="sub-file" name="file" type="file" required className={fileInputClass} />
             </Field>
             <fieldset className="flex flex-col gap-2">
               <legend className="font-medium">When should Helm hand it in?</legend>
@@ -167,7 +167,7 @@ export function SubmissionsBoard({
               {busy ? 'Checking your file…' : 'Upload and check'}
             </Button>
             {error && (
-              <p role="alert" className="text-flare">
+              <p role="alert" className="text-danger">
                 {error}
               </p>
             )}
@@ -176,7 +176,7 @@ export function SubmissionsBoard({
       </Card>
 
       <section aria-labelledby="queue-h" className="flex flex-col gap-3">
-        <h2 id="queue-h" className="text-lg font-semibold">
+        <h2 id="queue-h" className="text-[17px] font-semibold tracking-tight text-ink">
           Your hand-ins
         </h2>
         {items.length === 0 ? (
@@ -191,8 +191,11 @@ export function SubmissionsBoard({
       </section>
 
       {demo && (
-        <Card className="ring-2 ring-flare/40">
-          <h2 className="text-lg font-semibold">Demo: portal failure</h2>
+        <Card className={demoCardClass}>
+          <div className="flex items-center gap-2">
+            <h2 className="text-[17px] font-semibold tracking-tight text-ink">Portal failure</h2>
+            <Chip>Demo</Chip>
+          </div>
           <p className="mt-1 text-sm">
             Make the demo portal fail on purpose, to show retries and the alert.{' '}
             {fails > 0

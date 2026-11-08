@@ -100,7 +100,7 @@ export function SetupForm({ profile }: { profile: Profile }) {
       </Field>
       <fieldset className="flex flex-col gap-2">
         <legend className="font-medium">Where should Helm reach you?</legend>
-        <label className="flex min-h-11 items-center gap-3 rounded-xl px-3 ring-1 ring-sea-600/30">
+        <label className="flex min-h-11 items-center gap-3 rounded-xl px-3 ring-1 ring-line-strong">
           <input
             type="radio"
             name="channel"
@@ -110,7 +110,7 @@ export function SetupForm({ profile }: { profile: Profile }) {
           />
           In the Helm app only
         </label>
-        <label className="flex min-h-11 items-center gap-3 rounded-xl px-3 ring-1 ring-sea-600/30">
+        <label className="flex min-h-11 items-center gap-3 rounded-xl px-3 ring-1 ring-line-strong">
           <input
             type="radio"
             name="channel"
@@ -125,9 +125,7 @@ export function SetupForm({ profile }: { profile: Profile }) {
         {message && (
           <p
             role={message.kind === 'error' ? 'alert' : undefined}
-            className={
-              message.kind === 'error' ? 'text-flare' : 'text-emerald-700 dark:text-emerald-400'
-            }
+            className={message.kind === 'error' ? 'text-danger' : 'text-ok'}
           >
             {message.text}
           </p>

@@ -2,6 +2,19 @@
 
 import { useEffect, useState } from 'react';
 import { Card } from './ui';
+import {
+  IconAdd,
+  IconAlert,
+  IconBolt,
+  IconBox,
+  IconCheck,
+  IconHandIn,
+  IconMail,
+  IconMoon,
+  IconPen,
+  IconShield,
+  IconToday,
+} from './icons';
 
 interface Ev {
   id: string;
@@ -12,39 +25,47 @@ interface Ev {
   payload: Record<string, unknown>;
 }
 
-const ICON: Record<string, string> = {
-  'agent.woke': '☀︎',
-  'agent.pong': '↔︎',
-  'agent.error': '⚠︎',
-  'intake.parsed': '📄',
-  'brief.generated': '✎',
-  'brief.failed': '⚠︎',
-  'inbox.classified': '✉︎',
-  'change.detected': '?',
-  'change.applied': '↻',
-  'submission.scheduled': '⏲︎',
-  'submission.hold_notice_sent': '✋︎',
-  'submission.held': '⏸︎',
-  'submission.released': '▶︎',
-  'submission.cancelled': '✕',
-  'submission.checks_run': '☑︎',
-  'submission.submitted': '✓',
-  'submission.failed': '⚠︎',
-  'submission.retrying': '↻',
-  'submission.adjusted': '⇄',
-  'alert.sent': '‼︎',
-  'egress.blocked': '⛔︎',
-  'egress.allowed': '✓',
-  'sandbox.created': '▢',
-  'sandbox.command': '›',
-  'sandbox.ended': '▣',
-  'maritime:agent.woken': '⏻',
-  'maritime:agent.sleeping': '☾',
-  'maritime:agent.deployed': '⇪',
-  'maritime:agent.error': '⚠︎',
-  'maritime:agent.llm_limit_reached': '⏸︎',
-  'maritime:end_user.created': '+',
-  'maritime:helm.network_test': '⛨',
+type Tone = 'bad' | 'good' | 'maritime' | 'neutral';
+
+/** Icon and tone per event type. Tone is never the only signal: the text says what happened. */
+function look(
+  type: string,
+  payload: Record<string, unknown>,
+): { Icon: typeof IconToday; tone: Tone } {
+  const bad =
+    type.endsWith('error') ||
+    type.endsWith('failed') ||
+    type === 'egress.blocked' ||
+    type.endsWith('llm_limit_reached') ||
+    (type === 'maritime:helm.network_test' && payload.reached === false) ||
+    payload.injectionSuspected === true ||
+    payload.critical === true;
+  const tone: Tone = bad
+    ? 'bad'
+    : type === 'submission.submitted' || type === 'egress.allowed'
+      ? 'good'
+      : type.startsWith('maritime:')
+        ? 'maritime'
+        : 'neutral';
+  if (type === 'egress.blocked' || type === 'egress.allowed' || type.includes('network_test'))
+    return { Icon: IconShield, tone };
+  if (bad) return { Icon: IconAlert, tone };
+  if (type.endsWith('sleeping')) return { Icon: IconMoon, tone };
+  if (type.endsWith('woke') || type.endsWith('woken')) return { Icon: IconToday, tone };
+  if (type.startsWith('intake')) return { Icon: IconAdd, tone };
+  if (type.startsWith('brief')) return { Icon: IconPen, tone };
+  if (type.startsWith('inbox') || type.startsWith('change')) return { Icon: IconMail, tone };
+  if (type === 'submission.submitted') return { Icon: IconCheck, tone };
+  if (type.startsWith('submission') || type === 'alert.sent') return { Icon: IconHandIn, tone };
+  if (type.startsWith('sandbox')) return { Icon: IconBox, tone };
+  return { Icon: IconBolt, tone };
+}
+
+const TONE: Record<Tone, string> = {
+  bad: 'bg-danger-soft text-danger border-danger/20',
+  good: 'bg-ok-soft text-ok border-ok/20',
+  maritime: 'bg-accent-soft text-accent border-accent/20',
+  neutral: 'bg-canvas text-ink border-line',
 };
 
 const SOURCE: Record<string, string> = {
@@ -80,7 +101,7 @@ export function Timeline() {
     );
   return (
     <Card>
-      <ol aria-live="polite" className="flex flex-col divide-y divide-sea-100 dark:divide-sea-600">
+      <ol aria-live="polite" className="flex flex-col divide-y divide-line">
         {events.map((e) => {
           const src =
             typeof e.payload.source === 'string'
@@ -88,27 +109,29 @@ export function Timeline() {
               : null;
           const ms = typeof e.payload.ms === 'number' ? e.payload.ms : null;
           return (
-            <li key={e.id} className="flex gap-3 py-3">
-              <span aria-hidden className="w-6 shrink-0 text-center">
-                {ICON[e.type] ?? '•'}
+            <li key={e.id} className="flex gap-3 py-3 first:pt-0 last:pb-0">
+              <span
+                aria-hidden
+                className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full border ${TONE[look(e.type, e.payload).tone]}`}
+              >
+                {(() => {
+                  const { Icon } = look(e.type, e.payload);
+                  return <Icon width={16} height={16} />;
+                })()}
               </span>
               <div className="min-w-0">
                 <p
                   className={
-                    e.type.endsWith('error') ||
-                    e.type.endsWith('failed') ||
-                    e.type === 'egress.blocked' ||
-                    e.payload.injectionSuspected === true ||
-                    e.payload.critical === true
-                      ? 'font-medium text-flare'
-                      : 'font-medium'
+                    look(e.type, e.payload).tone === 'bad'
+                      ? 'font-medium text-danger'
+                      : 'font-medium text-ink'
                   }
                 >
                   {e.reason}
                 </p>
-                <p className="text-sm text-sea-800/80 dark:text-sea-100/80">
+                <p className="text-sm text-muted">
                   <time dateTime={e.occurredAt}>{e.atLabel}</time>
-                  {e.type.startsWith('maritime:') && ' · Maritime lifecycle event'}
+                  {e.type.startsWith('maritime:') && ' · from Maritime'}
                   {src && ` · via ${src}`}
                   {typeof e.payload.latencyMs === 'number' &&
                     ` · woke ${(e.payload.latencyMs / 1000).toFixed(1)}s after the trigger`}

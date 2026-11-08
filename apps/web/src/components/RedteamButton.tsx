@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Button, Card } from './ui';
+import { Button, Card, Chip, demoCardClass } from './ui';
 
 interface Result {
   allowlist: string[];
@@ -14,8 +14,11 @@ export function RedteamButton() {
   const [result, setResult] = useState<Result | null>(null);
   const [error, setError] = useState<string | null>(null);
   return (
-    <Card className="ring-2 ring-flare/40">
-      <h2 className="text-lg font-semibold">Red-team simulation</h2>
+    <Card className={demoCardClass}>
+      <div className="flex items-center gap-2">
+        <h2 className="text-[17px] font-semibold tracking-tight text-ink">Red-team simulation</h2>
+        <Chip>Demo</Chip>
+      </div>
       <p className="mt-1 text-sm">
         Pretend the agent was tricked by a malicious email. It will try to send a harmless test
         message to <code>example.com</code>, which is not on its allowlist. Maritime should block it
@@ -38,7 +41,7 @@ export function RedteamButton() {
       </Button>
       <div aria-live="polite" className="mt-3 text-sm">
         {error && (
-          <p role="alert" className="text-flare">
+          <p role="alert" className="text-danger">
             {error}
           </p>
         )}
@@ -56,7 +59,9 @@ export function RedteamButton() {
                   ) : t.reached ? (
                     'reachable'
                   ) : (
-                    <strong className="text-flare">refused{t.reason ? `: ${t.reason}` : ''}</strong>
+                    <strong className="text-danger">
+                      refused{t.reason ? `: ${t.reason}` : ''}
+                    </strong>
                   )}
                 </li>
               ))}

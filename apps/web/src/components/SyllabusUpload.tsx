@@ -2,7 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
-import { Button, Card, Field, inputClass } from './ui';
+import { Button, Card, Field, fileInputClass, inputClass, textareaClass } from './ui';
 
 type Phase =
   | { kind: 'idle' }
@@ -73,7 +73,7 @@ export function SyllabusUpload() {
             aria-selected={mode === m}
             onClick={() => setMode(m)}
             disabled={busy}
-            className={`min-h-11 flex-1 rounded-xl px-3 font-medium ring-1 ring-sea-600/30 ${mode === m ? 'bg-sea-800 text-white dark:bg-sea-100 dark:text-sea-950' : ''}`}
+            className={`min-h-11 flex-1 rounded-xl px-3 font-medium ring-1 ring-line-strong ${mode === m ? 'bg-ink text-white' : ''}`}
           >
             {m === 'file' ? 'Upload a file' : 'Paste text'}
           </button>
@@ -93,7 +93,7 @@ export function SyllabusUpload() {
               required
               accept=".pdf,.docx,.txt,.md"
               disabled={busy}
-              className={`${inputClass} file:mr-3 file:rounded-lg file:border-0 file:bg-sea-100 file:px-3 file:py-1.5`}
+              className={fileInputClass}
             />
           </Field>
         ) : (
@@ -109,7 +109,7 @@ export function SyllabusUpload() {
               minLength={40}
               rows={8}
               disabled={busy}
-              className={`${inputClass} min-h-40`}
+              className={`${textareaClass} min-h-40`}
             />
           </Field>
         )}
@@ -128,13 +128,13 @@ export function SyllabusUpload() {
         </Field>
         <div aria-live="polite">
           {phase.kind === 'reading' && (
-            <p className="rounded-xl bg-sea-100 px-3 py-2 text-sea-950 dark:bg-sea-950 dark:text-sea-50">
+            <p className="rounded-xl bg-accent-soft px-3 py-2 text-ink">
               Your agent is reading {phase.fileName}… ({elapsed}s, usually under 30s)
               {elapsed > 90 && ' This is taking longer than usual; the AI service may be busy.'}
             </p>
           )}
           {phase.kind === 'error' && (
-            <p role="alert" className="rounded-xl bg-flare/10 px-3 py-2 text-flare">
+            <p role="alert" className="rounded-xl bg-danger-soft px-3 py-2 text-danger">
               {phase.message}
             </p>
           )}
@@ -146,7 +146,7 @@ export function SyllabusUpload() {
               ? 'Reading…'
               : 'Read my document'}
         </Button>
-        <p className="text-sm text-sea-800/80 dark:text-sea-100/80">
+        <p className="text-sm text-muted">
           The file goes only to your private agent. Helm keeps the deadlines it finds, not the file.
         </p>
       </form>

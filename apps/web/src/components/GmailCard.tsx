@@ -18,9 +18,9 @@ export function GmailCard({ address, result }: { address: string | null; result?
   const banner = result ? RESULT[result] : undefined;
   return (
     <Card>
-      <h2 className="text-lg font-semibold">Email</h2>
+      <h2 className="text-[17px] font-semibold tracking-tight text-ink">Email</h2>
       {banner && (
-        <p role="status" className={`mt-1 text-sm ${banner.bad ? 'text-flare' : ''}`}>
+        <p role="status" className={`mt-1 text-sm ${banner.bad ? 'text-danger' : ''}`}>
           {banner.text}
         </p>
       )}
@@ -70,7 +70,7 @@ export function GmailCard({ address, result }: { address: string | null; result?
           </p>
           <a
             href="/api/gmail/connect"
-            className="mt-3 inline-flex min-h-11 items-center rounded-xl bg-sea-800 px-4 py-2 font-medium text-white hover:bg-sea-950 dark:bg-sea-100 dark:text-sea-950"
+            className="mt-3 inline-flex min-h-11 items-center rounded-xl bg-ink px-4 py-2 font-medium text-white hover:bg-ink"
           >
             Connect Gmail
           </a>

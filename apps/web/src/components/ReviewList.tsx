@@ -87,6 +87,99 @@ export function ReviewList({ intakeId }: { intakeId?: string }) {
     r.dueAt !== null && new Date(r.dueAt).getTime() <= Date.now();
   const past = rows.filter(isPast).length;
   const flagged = rows.filter((r) => !isPast(r) && (r.lowConfidence || !r.dueLocal)).length;
+  const needsCheck = (r: AssignmentView) => !isPast(r) && (r.lowConfidence || !r.dueLocal);
+  const pastRows = rows.filter(isPast);
+  const renderRow = (a: AssignmentView) => {
+    const pastRow = isPast(a);
+    const check = !pastRow && (a.lowConfidence || !a.dueLocal);
+    return (
+      <Card
+        key={a.id}
+        className={
+          check ? 'border-warn/50 ring-1 ring-warn/30' : pastRow && !keep[a.id] ? 'opacity-70' : ''
+        }
+      >
+        <div className="flex items-start gap-3">
+          <input
+            type="checkbox"
+            aria-label={`Keep ${a.title}`}
+            checked={keep[a.id] ?? false}
+            onChange={(e) => setKeep((k) => ({ ...k, [a.id]: e.target.checked }))}
+            className="mt-3 h-5 w-5 shrink-0"
+          />
+          <div className="flex min-w-0 flex-1 flex-col gap-2">
+            {pastRow && a.courseCode && <span className="text-sm text-muted">{a.courseCode}</span>}
+            {pastRow && (
+              <span className="w-fit rounded-full bg-canvas px-2 py-0.5 text-sm font-medium text-ink-soft">
+                Already past
+              </span>
+            )}
+            {check && (
+              <span className="w-fit rounded-full bg-warn-soft px-2 py-0.5 text-sm font-medium text-warn">
+                {a.dueLocal ? 'Check this' : 'Needs a date'}
+              </span>
+            )}
+            <label className="sr-only" htmlFor={`t-${a.id}`}>
+              Title
+            </label>
+            <input
+              id={`t-${a.id}`}
+              defaultValue={a.title}
+              onBlur={(e) => e.target.value !== a.title && save(a.id, { title: e.target.value })}
+              className={`${inputClass} font-medium`}
+            />
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_7rem_9rem]">
+              <label className="flex flex-col gap-1 text-sm">
+                Due
+                <input
+                  type="datetime-local"
+                  defaultValue={a.dueLocal ?? ''}
+                  onBlur={(e) =>
+                    (e.target.value || null) !== a.dueLocal &&
+                    save(a.id, { dueLocal: e.target.value || null })
+                  }
+                  className={inputClass}
+                />
+              </label>
+              <label className="flex flex-col gap-1 text-sm">
+                Weight %
+                <input
+                  type="number"
+                  min={0}
+                  max={100}
+                  step="0.5"
+                  defaultValue={a.weightPct ?? ''}
+                  onBlur={(e) => {
+                    const v = e.target.value === '' ? null : Number(e.target.value);
+                    if (v !== a.weightPct) void save(a.id, { weightPct: v });
+                  }}
+                  className={inputClass}
+                />
+              </label>
+              <label className="flex flex-col gap-1 text-sm">
+                Type
+                <select
+                  defaultValue={a.type}
+                  onChange={(e) => save(a.id, { type: e.target.value })}
+                  className={inputClass}
+                >
+                  {TYPES.map((t) => (
+                    <option key={t} value={t}>
+                      {t}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+            {a.assumption && <p className="text-sm">⚠︎ {a.assumption}</p>}
+            {a.evidence && (
+              <p className="text-sm text-muted italic">From the source: “{a.evidence}”</p>
+            )}
+          </div>
+        </div>
+      </Card>
+    );
+  };
   return (
     <div className="flex flex-col gap-5">
       <p>
@@ -101,115 +194,36 @@ export function ReviewList({ intakeId }: { intakeId?: string }) {
         {past > 0 &&
           ` ${past} ${past === 1 ? 'is' : 'are'} already past and left out; tick ${past === 1 ? 'it' : 'any'} you still need to do.`}
       </p>
-      {byCourse.map(([course, list]) => (
-        <section key={course} aria-labelledby={`c-${course}`} className="flex flex-col gap-3">
-          <h2 id={`c-${course}`} className="text-lg font-semibold">
-            {course}
-          </h2>
-          {list.map((a) => {
-            const pastRow = isPast(a);
-            const check = !pastRow && (a.lowConfidence || !a.dueLocal);
-            return (
-              <Card
-                key={a.id}
-                className={
-                  check ? 'ring-2 ring-amber-500' : pastRow && !keep[a.id] ? 'opacity-70' : ''
-                }
-              >
-                <div className="flex items-start gap-3">
-                  <input
-                    type="checkbox"
-                    aria-label={`Keep ${a.title}`}
-                    checked={keep[a.id] ?? false}
-                    onChange={(e) => setKeep((k) => ({ ...k, [a.id]: e.target.checked }))}
-                    className="mt-3 h-5 w-5 shrink-0"
-                  />
-                  <div className="flex min-w-0 flex-1 flex-col gap-2">
-                    {pastRow && (
-                      <span className="w-fit rounded-full bg-slate-200 px-2 py-0.5 text-sm font-medium text-slate-800">
-                        Already past
-                      </span>
-                    )}
-                    {check && (
-                      <span className="w-fit rounded-full bg-amber-100 px-2 py-0.5 text-sm font-medium text-amber-900">
-                        {a.dueLocal ? 'Check this' : 'Needs a date'}
-                      </span>
-                    )}
-                    <label className="sr-only" htmlFor={`t-${a.id}`}>
-                      Title
-                    </label>
-                    <input
-                      id={`t-${a.id}`}
-                      defaultValue={a.title}
-                      onBlur={(e) =>
-                        e.target.value !== a.title && save(a.id, { title: e.target.value })
-                      }
-                      className={`${inputClass} font-medium`}
-                    />
-                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_7rem_9rem]">
-                      <label className="flex flex-col gap-1 text-sm">
-                        Due
-                        <input
-                          type="datetime-local"
-                          defaultValue={a.dueLocal ?? ''}
-                          onBlur={(e) =>
-                            (e.target.value || null) !== a.dueLocal &&
-                            save(a.id, { dueLocal: e.target.value || null })
-                          }
-                          className={inputClass}
-                        />
-                      </label>
-                      <label className="flex flex-col gap-1 text-sm">
-                        Weight %
-                        <input
-                          type="number"
-                          min={0}
-                          max={100}
-                          step="0.5"
-                          defaultValue={a.weightPct ?? ''}
-                          onBlur={(e) => {
-                            const v = e.target.value === '' ? null : Number(e.target.value);
-                            if (v !== a.weightPct) void save(a.id, { weightPct: v });
-                          }}
-                          className={inputClass}
-                        />
-                      </label>
-                      <label className="flex flex-col gap-1 text-sm">
-                        Type
-                        <select
-                          defaultValue={a.type}
-                          onChange={(e) => save(a.id, { type: e.target.value })}
-                          className={inputClass}
-                        >
-                          {TYPES.map((t) => (
-                            <option key={t} value={t}>
-                              {t}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-                    </div>
-                    {a.assumption && <p className="text-sm">⚠︎ {a.assumption}</p>}
-                    {a.evidence && (
-                      <p className="text-sm text-sea-800/80 italic dark:text-sea-100/80">
-                        From the source: “{a.evidence}”
-                      </p>
-                    )}
-                  </div>
-                </div>
-              </Card>
-            );
-          })}
-        </section>
-      ))}
+      {byCourse.map(([course, list]) => {
+        const current = list
+          .filter((a) => !isPast(a))
+          .sort((x, y) => Number(needsCheck(y)) - Number(needsCheck(x)));
+        if (current.length === 0) return null;
+        return (
+          <section key={course} aria-labelledby={`c-${course}`} className="flex flex-col gap-3">
+            <h2 id={`c-${course}`} className="text-[17px] font-semibold tracking-tight text-ink">
+              {course}
+            </h2>
+            {current.map(renderRow)}
+          </section>
+        );
+      })}
+      {pastRows.length > 0 && (
+        <details className="rounded-card border border-line bg-surface/60 p-4">
+          <summary className="cursor-pointer text-sm font-semibold text-ink">
+            Already past ({pastRows.length}) · left out unless you tick them
+          </summary>
+          <div className="mt-3 flex flex-col gap-3">{pastRows.map(renderRow)}</div>
+        </details>
+      )}
       <div aria-live="polite">
         {error && (
-          <p role="alert" className="text-flare">
+          <p role="alert" className="text-danger">
             {error}
           </p>
         )}
       </div>
-      <div className="sticky bottom-0 -mx-5 bg-sea-50/95 px-5 py-3 backdrop-blur dark:bg-sea-950/95">
+      <div className="sticky bottom-[calc(3.5rem+env(safe-area-inset-bottom))] -mx-5 bg-canvas/95 px-5 py-3 backdrop-blur sm:bottom-0">
         <Button onClick={confirm} disabled={busy || kept === 0} className="w-full">
           {busy ? 'Saving…' : `Confirm ${kept} deadline${kept === 1 ? '' : 's'}`}
         </Button>

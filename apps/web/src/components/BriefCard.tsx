@@ -49,9 +49,9 @@ export function BriefCard({
   return (
     <Card>
       <div className="flex items-start justify-between gap-3">
-        <h2 className="text-lg font-semibold">Your brief</h2>
+        <h2 className="text-[17px] font-semibold tracking-tight text-ink">Your brief</h2>
         {brief && (
-          <p className="text-sm text-sea-800/80 dark:text-sea-100/80">
+          <p className="text-sm text-muted">
             {brief.trigger === 'cron'
               ? 'Morning brief'
               : brief.trigger === 'change'
@@ -73,19 +73,17 @@ export function BriefCard({
                   <li key={f.assignmentId} className="flex gap-3">
                     <span
                       aria-hidden
-                      className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full font-semibold ${f.overdue ? 'bg-flare text-white' : 'bg-sea-100 text-sea-950'}`}
+                      className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full font-semibold ${f.overdue ? 'bg-danger text-white' : 'bg-accent-soft text-ink'}`}
                     >
                       {i + 1}
                     </span>
                     <div>
                       <p className="font-medium">
-                        {f.courseCode && (
-                          <span className="text-sea-600 dark:text-sea-100">{f.courseCode} · </span>
-                        )}
+                        {f.courseCode && <span className="text-muted">{f.courseCode} · </span>}
                         {f.title}
                       </p>
                       <p className="text-sm">{f.why}</p>
-                      <p className="text-sm text-sea-800/80 dark:text-sea-100/80">
+                      <p className="text-sm text-muted">
                         Due {f.dueLabel}
                         {f.minutes > 0 &&
                           ` · plan ${f.minutes >= 60 ? `${Math.round((f.minutes / 60) * 10) / 10}h` : `${f.minutes} min`} today`}
@@ -113,16 +111,16 @@ export function BriefCard({
                 Also due in the next 3 days: {brief.dueSoon.map((d) => d.title).join(', ')}.
               </p>
             )}
-            <p className="text-sm text-sea-800/80 dark:text-sea-100/80">{brief.capacity}</p>
+            <p className="text-sm text-muted">{brief.capacity}</p>
           </>
         )}
         {waitingSince !== null && (
-          <p className="rounded-xl bg-sea-100 px-3 py-2 text-sea-950">
+          <p className="rounded-xl bg-accent-soft px-3 py-2 text-ink">
             Waking your agent and writing your brief…
           </p>
         )}
         {error && (
-          <p role="alert" className="text-flare">
+          <p role="alert" className="text-danger">
             {error}
           </p>
         )}

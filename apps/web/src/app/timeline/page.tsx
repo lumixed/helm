@@ -1,4 +1,3 @@
-import Link from 'next/link';
 import { RedteamButton } from '@/components/RedteamButton';
 import { Timeline } from '@/components/Timeline';
 import { Shell } from '@/components/ui';
@@ -9,17 +8,7 @@ export const dynamic = 'force-dynamic';
 export default async function TimelinePage() {
   await requireProfile();
   return (
-    <Shell
-      title="Agent timeline"
-      actions={
-        <Link
-          href="/today"
-          className="min-h-11 rounded-xl px-3 py-2 font-medium underline-offset-4 hover:underline"
-        >
-          Today
-        </Link>
-      }
-    >
+    <Shell title="Agent timeline">
       <p>Everything your private agent did, when, and why.</p>
       {process.env.DEMO_MODE === 'true' && <RedteamButton />}
       <Timeline />

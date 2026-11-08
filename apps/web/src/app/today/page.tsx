@@ -1,28 +1,28 @@
-import { formatWhen as whenLabel } from '@/lib/format';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { formatDuration, rankAssignments } from '@helm/shared';
 import { AgentStatus } from '@/components/AgentStatus';
 import { BriefCard } from '@/components/BriefCard';
 import { ChangesCard } from '@/components/ChangesCard';
-import { ShareMessage } from '@/components/ShareMessage';
-import { TelegramCard } from '@/components/TelegramCard';
-import { GmailCard } from '@/components/GmailCard';
-import { gmailConfig } from '@/lib/gmail';
-import { telegramToken } from '@/lib/telegram';
+import { IconAdd, IconArrow, IconShare } from '@/components/icons';
 import { SubmissionAlerts } from '@/components/SubmissionsBoard';
-import { listSubmissions } from '@/lib/submissions';
-import { demoEmailTemplates } from '@/lib/demo-emails';
-import { listChanges } from '@/lib/inbox';
-import { todaysBrief } from '@/lib/briefs';
-import { currentUser } from '@/lib/session';
-import { Card, Shell } from '@/components/ui';
+import { Banner, Card, CardTitle, Chip, Shell } from '@/components/ui';
 import { getDb } from '@/db';
 import { listAssignments } from '@/lib/assignments';
+import { todaysBrief } from '@/lib/briefs';
+import { formatWhen } from '@/lib/format';
+import { listChanges } from '@/lib/inbox';
 import { requireProfile } from '@/lib/page-data';
+import { currentUser } from '@/lib/session';
+import { listSubmissions } from '@/lib/submissions';
 
 export const dynamic = 'force-dynamic';
 
+/**
+ * Today answers one question: what do I do right now? Order: anything that needs the person
+ * (new items to check, hand-in alerts, changes), then the brief, then what's coming up.
+ * Setup things (Gmail, Telegram, install) live in Settings.
+ */
 export default async function TodayPage({
   searchParams,
 }: {
@@ -33,92 +33,84 @@ export default async function TodayPage({
   if (!user.onboarded) redirect('/setup');
   const db = await getDb();
   const fullUser = (await currentUser())!;
-  const [confirmed, pending, brief, changes] = await Promise.all([
+  const [confirmed, pending, brief, changes, submissions] = await Promise.all([
     listAssignments(db, user.id, user.timezone, { review: false }),
     listAssignments(db, user.id, user.timezone, { review: true }),
     todaysBrief(db, fullUser),
     listChanges(db, fullUser),
+    listSubmissions(db, fullUser),
   ]);
-  const submissions = await listSubmissions(db, fullUser);
-  const demo = process.env.DEMO_MODE === 'true';
   const pickable = confirmed
     .filter((a) => a.status === 'todo' || a.status === 'in_progress')
     .map((a) => ({ id: a.id, label: `${a.courseCode ? `${a.courseCode} · ` : ''}${a.title}` }));
+
   const now = new Date();
   const ranked = rankAssignments(confirmed, now);
-  const focus = ranked.slice(0, 3);
-  const soon = ranked.filter((r) => r.hoursLeft <= 72 && !focus.includes(r));
+  // Without a brief yet, show the live ranking so the page is never empty.
+  const live = brief ? [] : ranked.slice(0, 3);
+  const shown = new Set([
+    ...(brief?.focus.map((f) => f.assignmentId) ?? []),
+    ...live.map((r) => r.item.id),
+  ]);
+  const comingUp = ranked.filter((r) => !shown.has(r.item.id) && r.hoursLeft <= 7 * 24).slice(0, 8);
+  const dateLabel = new Intl.DateTimeFormat('en-CA', {
+    timeZone: user.timezone,
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric',
+  }).format(now);
 
   return (
-    <Shell
-      title={user.name ? `Today, ${user.name}` : 'Today'}
-      actions={
-        <nav aria-label="Main" className="flex gap-1">
-          <Link
-            href="/submissions"
-            className="min-h-11 rounded-xl px-3 py-2 font-medium underline-offset-4 hover:underline"
-          >
-            Hand in
-          </Link>
-          <Link
-            href="/timeline"
-            className="min-h-11 rounded-xl px-3 py-2 font-medium underline-offset-4 hover:underline"
-          >
-            Timeline
-          </Link>
-          <Link
-            href="/setup"
-            className="min-h-11 rounded-xl px-3 py-2 font-medium underline-offset-4 hover:underline"
-          >
-            Settings
-          </Link>
-        </nav>
-      }
-    >
+    <Shell title={user.name ? `Today, ${user.name}` : 'Today'} subtitle={dateLabel}>
+      {gmail && (
+        <Banner tone={gmail === 'connected' || gmail === 'ok' ? 'ok' : 'warn'} role="status">
+          {gmail === 'connected' || gmail === 'ok'
+            ? 'Gmail is connected. Your agent will read new mail (read-only).'
+            : 'Gmail was not connected. You can try again in Settings.'}
+        </Banner>
+      )}
+
       {pending.length > 0 && (
         <Link
           href="/review"
-          className="block rounded-2xl bg-amber-100 px-5 py-4 font-medium text-amber-950 ring-1 ring-amber-400"
+          className="flex items-center justify-between gap-3 rounded-card border border-warn/25 bg-warn-soft px-5 py-4 text-ink transition-colors hover:border-warn/50"
         >
-          {pending.length} new deadline{pending.length === 1 ? '' : 's'} to check →
+          <span>
+            <span className="font-semibold">
+              {pending.length} new item{pending.length === 1 ? '' : 's'} to check
+            </span>
+            <span className="block text-sm text-muted">Nothing is used until you confirm it.</span>
+          </span>
+          <IconArrow />
         </Link>
       )}
 
       <SubmissionAlerts initial={submissions} />
-
       <ChangesCard pending={changes.pending} applied={changes.applied} assignments={pickable} />
-
       <BriefCard initial={brief} briefTime={user.briefTimeLocal} />
 
-      <Card>
-        <h2 className="text-lg font-semibold">Right now</h2>
-        {focus.length === 0 ? (
-          <p className="mt-2">
-            {confirmed.length === 0 ? 'No deadlines yet. ' : 'Nothing is pressing right now. '}
-            <Link href="/intake" className="font-medium underline underline-offset-4">
-              Add a document
-            </Link>
-          </p>
-        ) : (
-          <ol className="mt-3 flex flex-col gap-3">
-            {focus.map((r, i) => (
-              <li key={r.item.id} className="flex gap-3">
+      {live.length > 0 && (
+        <Card>
+          <CardTitle aside="Live ranking">Right now</CardTitle>
+          <ol className="flex flex-col divide-y divide-line">
+            {live.map((r, i) => (
+              <li key={r.item.id} className="flex gap-3 py-3 first:pt-0 last:pb-0">
                 <span
                   aria-hidden
-                  className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full font-semibold ${r.overdue ? 'bg-flare text-white' : 'bg-sea-100 text-sea-950'}`}
+                  className={`mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-semibold ${r.overdue ? 'bg-danger text-white' : 'bg-canvas text-ink'}`}
                 >
                   {i + 1}
                 </span>
-                <div>
-                  <p className="font-medium">
+                <div className="min-w-0">
+                  <p className="font-medium text-ink">
                     {r.item.courseCode && (
-                      <span className="text-sea-600 dark:text-sea-100">{r.item.courseCode} · </span>
+                      <span className="text-muted">{r.item.courseCode} · </span>
                     )}
                     {r.item.title}
                   </p>
-                  <p className="text-sm">{r.why}</p>
-                  <p className="text-sm text-sea-800/80 dark:text-sea-100/80">
-                    Due {whenLabel(r.item.dueAt!, user.timezone)}
+                  <p className="text-sm text-ink-soft">{r.why}</p>
+                  <p className="text-sm text-muted">
+                    Due {formatWhen(r.item.dueAt!, user.timezone)}
                     {r.remainingMinutes > 0 &&
                       ` · plan ${formatDuration(Math.min(r.remainingMinutes, 120))} today`}
                   </p>
@@ -126,42 +118,94 @@ export default async function TodayPage({
               </li>
             ))}
           </ol>
-        )}
-      </Card>
+        </Card>
+      )}
 
-      {soon.length > 0 && (
+      {confirmed.length === 0 && pending.length === 0 && (
+        <Card className="text-center">
+          <p className="text-ink">Nothing tracked yet.</p>
+          <p className="mt-1 text-sm text-muted">
+            Add a syllabus, a lease or a bill, or share a message, and Helm lists what you owe.
+          </p>
+        </Card>
+      )}
+
+      {comingUp.length > 0 && (
         <Card>
-          <h2 className="text-lg font-semibold">Also due in the next 3 days</h2>
-          <ul className="mt-2 flex flex-col gap-1">
-            {soon.map((r) => (
-              <li key={r.item.id}>
-                {r.item.courseCode} {r.item.title} · {whenLabel(r.item.dueAt!, user.timezone)}
+          <CardTitle aside="Next 7 days">Coming up</CardTitle>
+          <ul className="flex flex-col divide-y divide-line">
+            {comingUp.map((r) => (
+              <li
+                key={r.item.id}
+                className="flex items-center justify-between gap-3 py-2.5 first:pt-0 last:pb-0"
+              >
+                <span className="min-w-0 truncate text-ink">
+                  {r.item.courseCode && <span className="text-muted">{r.item.courseCode} · </span>}
+                  {r.item.title}
+                </span>
+                <Chip tone={r.hoursLeft <= 48 ? 'warn' : 'neutral'}>
+                  {formatWhen(r.item.dueAt!, user.timezone).replace(/,\s\d.*$/, '')}
+                </Chip>
               </li>
             ))}
           </ul>
         </Card>
       )}
 
-      <p className="text-sm text-sea-800/80 dark:text-sea-100/80">
-        Your morning brief arrives at {user.briefTimeLocal} ({user.timezone.replaceAll('_', ' ')}).{' '}
-        <Link href="/intake" className="underline underline-offset-4">
-          Add another document
-        </Link>
-      </p>
-      <ShareMessage templates={demo ? demoEmailTemplates(confirmed, user.timezone, now) : []} />
-      {gmailConfig() && <GmailCard address={fullUser.gmailAddress} result={gmail} />}
-      {telegramToken() && <TelegramCard linked={user.telegramLinked} />}
-      <details className="text-sm">
-        <summary className="min-h-11 cursor-pointer py-2 font-medium">
-          Put Helm on your phone&apos;s home screen
-        </summary>
-        <p>
-          iPhone: open Helm in Safari, tap Share, then <strong>Add to Home Screen</strong>. Android:
-          open the Chrome menu, then <strong>Install app</strong>. On Android you can then share any
-          message to Helm from the share sheet.
-        </p>
-      </details>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <QuickLink
+          href="/share"
+          Icon={IconShare}
+          title="Share a message"
+          body="An email, text or chat about a date? Paste it and Helm updates your list."
+        />
+        <QuickLink
+          href="/intake"
+          Icon={IconAdd}
+          title="Add a document"
+          body="Syllabus, lease, bill or invite. Your agent finds every date."
+        />
+      </div>
+
       <AgentStatus initial={agent} />
+      <p className="text-center text-sm text-muted">
+        Your brief arrives each morning at {user.briefTimeLocal} (
+        {user.timezone.replaceAll('_', ' ')}).
+      </p>
     </Shell>
+  );
+}
+
+function QuickLink({
+  href,
+  Icon,
+  title,
+  body,
+}: {
+  href: string;
+  Icon: typeof IconShare;
+  title: string;
+  body: string;
+}) {
+  return (
+    <Link
+      href={href}
+      className="group flex gap-3 rounded-card border border-line bg-surface p-5 transition-colors hover:border-line-strong"
+    >
+      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-canvas text-ink">
+        <Icon />
+      </span>
+      <span>
+        <span className="flex items-center gap-1 font-semibold text-ink">
+          {title}
+          <IconArrow
+            width={16}
+            height={16}
+            className="transition-transform group-hover:translate-x-0.5"
+          />
+        </span>
+        <span className="mt-0.5 block text-sm text-muted">{body}</span>
+      </span>
+    </Link>
   );
 }

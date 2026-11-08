@@ -1,4 +1,3 @@
-import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { SubmissionsBoard } from '@/components/SubmissionsBoard';
 import { Shell } from '@/components/ui';
@@ -35,25 +34,7 @@ export default async function SubmissionsPage() {
       allowed: a.allowedFileTypes,
     }));
   return (
-    <Shell
-      title="Hand in"
-      actions={
-        <nav aria-label="Main" className="flex gap-1">
-          <Link
-            href="/today"
-            className="min-h-11 rounded-xl px-3 py-2 font-medium underline-offset-4 hover:underline"
-          >
-            Today
-          </Link>
-          <Link
-            href="/timeline"
-            className="min-h-11 rounded-xl px-3 py-2 font-medium underline-offset-4 hover:underline"
-          >
-            Timeline
-          </Link>
-        </nav>
-      }
-    >
+    <Shell title="Hand in">
       <SubmissionsBoard
         initial={submissions}
         assignments={options}

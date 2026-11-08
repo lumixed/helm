@@ -2,16 +2,16 @@
 
 import { useState } from 'react';
 import type { SubmissionView } from '@/lib/submissions';
-import { Button } from './ui';
+import { Button, Chip, type Tone } from './ui';
 
-const STATUS: Record<string, { label: string; tone: string }> = {
-  ready: { label: 'Checked, not scheduled', tone: 'bg-sea-100 text-sea-950' },
-  checks_failed: { label: 'Needs a fix', tone: 'bg-flare/15 text-flare' },
-  scheduled: { label: 'Scheduled', tone: 'bg-sea-100 text-sea-950' },
-  held: { label: 'On hold', tone: 'bg-amber-100 text-amber-950' },
-  submitting: { label: 'Submitting…', tone: 'bg-sea-600 text-white' },
-  submitted: { label: 'Submitted', tone: 'bg-emerald-100 text-emerald-950' },
-  failed: { label: 'NOT submitted', tone: 'bg-flare text-white' },
+const STATUS: Record<string, { label: string; tone: Tone }> = {
+  ready: { label: 'Checked, not scheduled', tone: 'neutral' },
+  checks_failed: { label: 'Needs a fix', tone: 'danger' },
+  scheduled: { label: 'Scheduled', tone: 'accent' },
+  held: { label: 'On hold', tone: 'warn' },
+  submitting: { label: 'Submitting…', tone: 'accent' },
+  submitted: { label: 'Submitted', tone: 'ok' },
+  failed: { label: 'NOT submitted', tone: 'danger' },
 };
 
 const MARK = { pass: '✓', warn: '!', fail: '✕' } as const;
@@ -43,30 +43,26 @@ export function SubmissionItem({
       setError(((await res.json().catch(() => ({}))) as { error?: string }).error ?? 'Try again.');
     onChange();
   };
-  const st = STATUS[s.status] ?? { label: s.status, tone: 'bg-sea-100 text-sea-950' };
+  const st = STATUS[s.status] ?? { label: s.status, tone: 'neutral' as Tone };
   const ackId = `ack-${s.id}`;
 
   return (
     <li
-      className={`flex flex-col gap-2 rounded-xl p-4 ring-1 ${s.status === 'failed' ? 'ring-2 ring-flare' : s.holdOpen ? 'ring-2 ring-amber-400' : 'ring-sea-100 dark:ring-sea-600'}`}
+      className={`flex flex-col gap-2 rounded-xl p-4 ring-1 ${s.status === 'failed' ? 'ring-2 ring-danger' : s.holdOpen ? 'ring-2 ring-warn/30' : 'ring-line'}`}
     >
       <div className="flex flex-wrap items-start justify-between gap-2">
         <p className="font-medium">
-          {s.courseCode && (
-            <span className="text-sea-600 dark:text-sea-100">{s.courseCode} · </span>
-          )}
+          {s.courseCode && <span className="text-accent">{s.courseCode} · </span>}
           {s.title}
         </p>
-        <span className={`rounded-full px-2.5 py-0.5 text-sm font-medium ${st.tone}`}>
-          {st.label}
-        </span>
+        <Chip tone={st.tone}>{st.label}</Chip>
       </div>
-      <p className="text-sm text-sea-800/80 dark:text-sea-100/80">
+      <p className="text-sm text-muted">
         {s.fileName} · {(s.fileSize / 1024).toFixed(0)} KB · due {s.dueLabel ?? '—'}
       </p>
 
       {s.holdOpen && (
-        <div role="alert" className="rounded-xl bg-amber-100 px-3 py-2 text-amber-950">
+        <div role="alert" className="rounded-xl bg-warn-soft px-3 py-2 text-ink">
           <p className="font-medium">Last chance: Helm submits this at {s.submitLabel}.</p>
           <p className="text-sm">Hold it, send it now, or leave it and Helm will go ahead.</p>
         </div>
@@ -77,7 +73,7 @@ export function SubmissionItem({
           {s.submitAtFromDefault ? ' (2 hours before the deadline)' : ''}. You&apos;ll get a hold
           notice first.
           {s.attempts > 0 && s.lastError && (
-            <span className="block text-flare">
+            <span className="block text-danger">
               Attempt {s.attempts} failed: {s.lastError} Helm will try again.
             </span>
           )}
@@ -90,7 +86,7 @@ export function SubmissionItem({
       )}
       {s.status === 'failed' && (
         <div role="alert" className="text-sm">
-          <p className="font-medium text-flare">{s.lastError}</p>
+          <p className="font-medium text-danger">{s.lastError}</p>
           <p>
             Submit it yourself now on the{' '}
             <a href="/mock-portal" className="font-medium underline underline-offset-4">
@@ -116,7 +112,7 @@ export function SubmissionItem({
       {!compact && (s.status === 'ready' || s.status === 'checks_failed') && (
         <ul className="flex flex-col gap-1 text-sm">
           {s.checks.map((c) => (
-            <li key={c.check} className={c.status === 'fail' ? 'text-flare' : ''}>
+            <li key={c.check} className={c.status === 'fail' ? 'text-danger' : ''}>
               <span aria-hidden className="inline-block w-5 font-semibold">
                 {MARK[c.status]}
               </span>
@@ -207,7 +203,7 @@ export function SubmissionItem({
         </div>
       )}
       {error && (
-        <p role="alert" className="text-sm text-flare">
+        <p role="alert" className="text-sm text-danger">
           {error}
         </p>
       )}

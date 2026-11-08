@@ -28,7 +28,7 @@ export function TelegramCard({ linked }: { linked: boolean }) {
   }
   return (
     <Card>
-      <h2 className="text-lg font-semibold">Your phone</h2>
+      <h2 className="text-[17px] font-semibold tracking-tight text-ink">Your phone</h2>
       {linked ? (
         <>
           <p className="mt-1">
@@ -58,7 +58,7 @@ export function TelegramCard({ linked }: { linked: boolean }) {
         </>
       )}
       {error && (
-        <p role="alert" className="mt-2 text-sm text-flare">
+        <p role="alert" className="mt-2 text-sm text-danger">
           {error}
         </p>
       )}

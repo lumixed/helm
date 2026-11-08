@@ -30,7 +30,7 @@ export function SignInForm() {
 
   return (
     <form onSubmit={onSubmit} className="flex flex-col gap-4" noValidate={false}>
-      <Field label="School email" htmlFor="email">
+      <Field label="Email" htmlFor="email">
         <input
           id="email"
           name="email"
@@ -51,14 +51,17 @@ export function SignInForm() {
         />
       </Field>
       {error && (
-        <p role="alert" className="rounded-xl bg-flare/10 px-3 py-2 text-flare">
+        <p
+          role="alert"
+          className="rounded-xl border border-danger/25 bg-danger-soft px-4 py-3 text-sm text-danger"
+        >
           {error}
         </p>
       )}
       <Button type="submit" disabled={busy}>
-        {busy ? 'Setting up your agent…' : 'Continue'}
+        {busy ? 'Setting up your private agent…' : 'Continue'}
       </Button>
-      <p className="text-sm text-sea-800/80 dark:text-sea-100/80">
+      <p className="text-sm text-muted">
         Demo build: there is no password or email check yet. Use fictional data only.
       </p>
     </form>

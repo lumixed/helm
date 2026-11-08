@@ -1,16 +1,64 @@
 @import 'tailwindcss';
 
+/*
+ * Design tokens: a calm, airy SaaS system (navy actions, cool off-white canvas, thin borders,
+ * one blue accent). Semantic names so components never hard-code hex values.
+ */
 @theme {
-  --color-sea-50: #f0f6fb;
-  --color-sea-100: #dcebf6;
-  --color-sea-600: #1f5f8b;
-  --color-sea-800: #143e5c;
-  --color-sea-950: #0a2133;
-  --color-flare: #d9480f;
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+
+  --color-ink: #0b1220; /* primary: main actions, strong text */
+  --color-ink-soft: #1f2937; /* secondary: body text */
+  --color-accent: #2553c4; /* tertiary: links, emphasis */
+  --color-canvas: #f4f5f7; /* neutral: page background, cards */
+  --color-surface: #ffffff; /* cards, pills, inputs */
+  --color-on-surface: #111318;
+  --color-line: #e5e7eb; /* border */
+  --color-line-strong: #d6d9de; /* firmer border for controls */
+  --color-muted: #6b7280; /* metadata, quiet nav */
+  --color-danger: #d92d20;
+  --color-danger-soft: #fef3f2;
+  /* Status tones, used only in small chips and banners. */
+  --color-warn: #b54708;
+  --color-warn-soft: #fffaeb;
+  --color-ok: #067647;
+  --color-ok-soft: #ecfdf3;
+  --color-accent-soft: #eef2fc;
+
+  --radius-card: 8px;
+
+  --text-display: 52px;
+  --text-display--line-height: 62px;
+  --text-display--letter-spacing: -0.9px;
+  --text-headline: 38px;
+  --text-headline--line-height: 46px;
+  --text-headline--letter-spacing: -0.475px;
+  --text-title: 28px;
+  --text-title--line-height: 34px;
 }
 
 :root {
-  color-scheme: light dark;
+  color-scheme: light;
+  accent-color: var(--color-ink); /* checkboxes, radios */
+}
+
+html {
+  -webkit-tap-highlight-color: transparent;
+}
+
+body {
+  font-feature-settings: 'ss01', 'cv11';
+}
+
+::selection {
+  background: var(--color-accent-soft);
+}
+
+/* One visible, consistent focus ring for keyboard users. */
+:where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -1,8 +1,10 @@
 import type { Metadata, Viewport } from 'next';
+import { GeistMono } from 'geist/font/mono';
+import { GeistSans } from 'geist/font/sans';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'Helm',
+  title: { default: 'Helm', template: '%s · Helm' },
   description:
     'A private assistant for everyone: one agent that reads your email and messages, plans your day, and handles routine hand-ins with your OK.',
   applicationName: 'Helm',
@@ -13,15 +15,13 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
-  themeColor: '#143e5c',
+  themeColor: '#f4f5f7',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
-      <body className="min-h-dvh bg-sea-50 text-sea-950 antialiased dark:bg-sea-950 dark:text-sea-50">
-        {children}
-      </body>
+    <html lang="en" className={`${GeistSans.variable} ${GeistMono.variable}`}>
+      <body className="min-h-dvh bg-canvas font-sans text-ink-soft antialiased">{children}</body>
     </html>
   );
 }

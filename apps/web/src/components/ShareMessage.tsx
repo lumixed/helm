@@ -2,7 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
-import { Button, Card, Field, inputClass } from './ui';
+import { Button, Card, Chip, Field, inputClass, textareaClass } from './ui';
 
 export type Source = 'email' | 'whatsapp' | 'instagram' | 'sms' | 'other';
 
@@ -108,40 +108,42 @@ export function ShareMessage({
   }
 
   return (
-    <Card className={demo ? 'ring-2 ring-sea-600/30' : ''}>
-      <h2 className="text-lg font-semibold">
-        {demo ? 'Share with Helm (demo messages)' : 'Share a message with Helm'}
-      </h2>
-      <p className="mt-1 text-sm">
-        Paste a message from WhatsApp, Instagram, texts or anywhere. Helm can&apos;t read those apps
-        by itself; it only sees what you share. It reads the message as information, never as
-        instructions.
+    <Card>
+      <p className="text-sm text-ink-soft">
+        From WhatsApp, Instagram, texts or anywhere. Helm can&apos;t read those apps by itself; it
+        only sees what you share here.
       </p>
       {demo && (
-        <div className="mt-3 flex flex-wrap gap-2" role="group" aria-label="Demo messages">
+        <div className="mt-4 flex items-center gap-2">
+          <h2 className="text-sm font-semibold text-ink">Try a demo message</h2>
+          <Chip>Demo</Chip>
+        </div>
+      )}
+      {demo && (
+        <div className="mt-2 flex flex-wrap gap-2" role="group" aria-label="Demo messages">
           {templates.map((t) => (
-            <Button
+            <button
               key={t.id}
-              variant={t.id === draft.id ? 'primary' : 'ghost'}
+              type="button"
               aria-pressed={t.id === draft.id}
               onClick={() => setDraft(t)}
-              className="text-sm"
+              className={toggleClass(t.id === draft.id)}
             >
               {t.label}
-            </Button>
+            </button>
           ))}
-          <Button
-            variant={draft.id === 'blank' ? 'primary' : 'ghost'}
+          <button
+            type="button"
             aria-pressed={draft.id === 'blank'}
             onClick={() => setDraft(blank())}
-            className="text-sm"
+            className={toggleClass(draft.id === 'blank')}
           >
             My own
-          </Button>
+          </button>
         </div>
       )}
       {demo && draft.id !== 'blank' && (
-        <p className="mt-2 text-sm font-medium text-sea-800/80 dark:text-sea-100/80">
+        <p className="mt-2 text-sm font-medium text-muted">
           Demo message: made up for the demo, not from a real account.
         </p>
       )}
@@ -185,9 +187,9 @@ export function ShareMessage({
         <Field label="Message" htmlFor="share-body">
           <textarea
             id="share-body"
-            rows={5}
+            rows={6}
             required
-            className={inputClass}
+            className={textareaClass}
             value={draft.body}
             onChange={(e) => setDraft({ ...draft, body: e.target.value })}
           />
@@ -206,18 +208,23 @@ export function ShareMessage({
             <strong>{DECISION[status.decision ?? ''] ?? status.decision}.</strong> {status.summary}{' '}
             {status.reason}
             {status.injectionSuspected && (
-              <span className="mt-1 block font-medium text-flare">
+              <span className="mt-1 block font-medium text-danger">
                 This message tried to give the agent instructions. It was treated as plain text.
               </span>
             )}
           </p>
         )}
         {error && (
-          <p role="alert" className="text-flare">
+          <p role="alert" className="text-danger">
             {error}
           </p>
         )}
       </div>
     </Card>
   );
+}
+
+/** Compact pill toggle for picking a demo message (pressed = dark). */
+function toggleClass(on: boolean) {
+  return `min-h-9 rounded-full border px-3.5 text-sm font-semibold transition-colors ${on ? 'border-ink bg-ink text-white' : 'border-line-strong bg-surface text-on-surface hover:bg-canvas'}`;
 }

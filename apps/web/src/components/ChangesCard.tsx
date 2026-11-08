@@ -25,8 +25,8 @@ export function ChangesCard({
 }) {
   if (pending.length === 0 && applied.length === 0) return null;
   return (
-    <Card className={pending.length ? 'ring-2 ring-amber-400' : ''}>
-      <h2 className="text-lg font-semibold">
+    <Card className={pending.length ? 'ring-2 ring-warn/30' : ''}>
+      <h2 className="text-[17px] font-semibold tracking-tight text-ink">
         {pending.length
           ? `Helm found ${pending.length} change${pending.length === 1 ? '' : 's'} to check`
           : 'Recent changes from email'}
@@ -45,9 +45,7 @@ export function ChangesCard({
             {applied.map((c) => (
               <li key={c.id}>
                 <p className="font-medium">
-                  {c.courseCode && (
-                    <span className="text-sea-600 dark:text-sea-100">{c.courseCode} · </span>
-                  )}
+                  {c.courseCode && <span className="text-accent">{c.courseCode} · </span>}
                   {c.title}: {c.label} {c.from ? `${c.from} → ` : ''}
                   {c.to}
                 </p>
@@ -63,7 +61,7 @@ export function ChangesCard({
 
 function Provenance({ c }: { c: ChangeView }) {
   return (
-    <p className="text-sm text-sea-800/80 dark:text-sea-100/80">
+    <p className="text-sm text-muted">
       From {c.sender}
       {c.channel && c.channel !== 'email' ? ` (${c.channel}, shared by you)` : ''}
       {c.receivedLabel ? `, ${c.receivedLabel}` : ''}
@@ -104,9 +102,7 @@ function PendingItem({ c, assignments }: { c: ChangeView; assignments: Option[] 
       <p className="font-medium">
         {c.title ? (
           <>
-            {c.courseCode && (
-              <span className="text-sea-600 dark:text-sea-100">{c.courseCode} · </span>
-            )}
+            {c.courseCode && <span className="text-accent">{c.courseCode} · </span>}
             {c.title}:{' '}
           </>
         ) : (
@@ -150,7 +146,7 @@ function PendingItem({ c, assignments }: { c: ChangeView; assignments: Option[] 
         </Button>
       </div>
       {error && (
-        <p role="alert" className="text-sm text-flare">
+        <p role="alert" className="text-sm text-danger">
           {error}
         </p>
       )}

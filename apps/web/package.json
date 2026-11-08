@@ -16,6 +16,7 @@
     "@google/genai": "^3.0.0",
     "@helm/shared": "workspace:*",
     "drizzle-orm": "^0.45.4",
+    "geist": "^1.9.2",
     "maritime-sdk": "^0.11.0",
     "next": "^16.4.5",
     "postgres": "^4.1.0",
