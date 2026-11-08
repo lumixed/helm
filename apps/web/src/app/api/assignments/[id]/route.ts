@@ -17,6 +17,8 @@ const Patch = z
       .regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/)
       .nullable(),
     weightPct: z.number().min(0).max(100).nullable(),
+    /** Bills: the amount in major units (45.5 = $45.50), or null to clear. */
+    amount: z.number().min(0).max(10_000_000).nullable(),
     estMinutes: z.number().int().min(0).max(10_000).nullable(),
     progressPct: z.number().int().min(0).max(100),
     type: z.enum(ASSIGNMENT_TYPES),
@@ -32,7 +34,7 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
   if (!z.uuid().safeParse(id).success) return fail(404, 'Not found');
   const body = await readBody(req, Patch);
   if (body instanceof Response) return body;
-  const { dueLocal, ...rest } = body;
+  const { dueLocal, amount, ...rest } = body;
   let dueAt: Date | null | undefined;
   if (dueLocal !== undefined) {
     try {
@@ -44,7 +46,14 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
   const db = await getDb();
   const [row] = await db
     .update(schema.assignments)
-    .set({ ...rest, ...(dueAt !== undefined ? { dueAt } : {}), source: undefined })
+    .set({
+      ...rest,
+      ...(dueAt !== undefined ? { dueAt } : {}),
+      ...(amount !== undefined
+        ? { amountCents: amount === null ? null : Math.round(amount * 100) }
+        : {}),
+      source: undefined,
+    })
     .where(and(eq(schema.assignments.id, id), eq(schema.assignments.userId, user.id)))
     .returning();
   if (!row) return fail(404, 'Not found');

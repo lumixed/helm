@@ -2,7 +2,7 @@ import { sendPushToUser } from './push';
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { eq } from 'drizzle-orm';
 import type { BriefContent } from '@helm/shared';
-import { eventTime } from './format';
+import { eventTime, formatMoney } from './format';
 import type { Db } from '@/db';
 import { schema } from '@/db';
 
@@ -146,11 +146,25 @@ export function briefMessage(b: BriefContent, appUrl: string | undefined, tz = '
       ),
     );
   }
-  if (b.schedule?.length)
+  const day = [
+    ...(b.schedule ?? []).map((e) => ({
+      start: e.start,
+      allDay: e.allDay,
+      text: `${eventTime(e, tz)} ${e.title}`,
+    })),
+    ...(b.blocks ?? []).map((w) => ({
+      start: w.start,
+      allDay: false,
+      text: `${eventTime({ allDay: false, start: w.start }, tz)} ✍︎ ${w.title}`,
+    })),
+  ].sort((x, y) => (x.allDay === y.allDay ? x.start.localeCompare(y.start) : x.allDay ? -1 : 1));
+  if (day.length) lines.push('', 'Your day:', ...day.slice(0, 8).map((d) => `• ${d.text}`));
+  if (b.money)
     lines.push(
       '',
-      'Your calendar:',
-      ...b.schedule.slice(0, 6).map((e) => `• ${eventTime(e, tz)} ${e.title}`),
+      `Bills this week: ${formatMoney(b.money.totalCents, b.money.currency)} (${b.money.items
+        .map((i) => `${i.title} ${formatMoney(i.amountCents, b.money!.currency)}`)
+        .join(', ')})`,
     );
   if (b.changes.length)
     lines.push(

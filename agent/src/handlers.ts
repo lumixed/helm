@@ -1,5 +1,6 @@
 import {
   AgentState,
+  normalizeMoney,
   eveningText,
   weeklyText,
   localToUtc,
@@ -1377,6 +1378,7 @@ async function addTaskFromChat(
       dueAt,
       type: t.type,
       area: t.area ?? null,
+      ...normalizeMoney(t.amount, t.currency),
     });
     const body = (await res.json().catch(() => ({}))) as { dueLabel?: string; error?: string };
     if (!res.ok)

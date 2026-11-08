@@ -236,6 +236,8 @@ export async function saveInboxResult(
           dueTimeAssumed: change.dueTimeAssumed,
           assumption: `From ${source} on ${msg.receivedAt.toISOString().slice(0, 10)}.`,
           weightPct: change.weightPct,
+          amount: change.amount ?? null,
+          currency: change.currency ?? null,
           type: change.type ?? 'assignment',
           allowedFileTypes: [],
           confidence: change.confidence,

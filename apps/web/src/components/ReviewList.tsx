@@ -141,21 +141,40 @@ export function ReviewList({ intakeId }: { intakeId?: string }) {
                   className={inputClass}
                 />
               </label>
-              <label className="flex flex-col gap-1 text-sm">
-                Weight %
-                <input
-                  type="number"
-                  min={0}
-                  max={100}
-                  step="0.5"
-                  defaultValue={a.weightPct ?? ''}
-                  onBlur={(e) => {
-                    const v = e.target.value === '' ? null : Number(e.target.value);
-                    if (v !== a.weightPct) void save(a.id, { weightPct: v });
-                  }}
-                  className={inputClass}
-                />
-              </label>
+              {a.type === 'bill' ? (
+                <label className="flex flex-col gap-1 text-sm">
+                  Amount{a.currency ? ` (${a.currency})` : ''}
+                  <input
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    inputMode="decimal"
+                    defaultValue={a.amountCents != null ? a.amountCents / 100 : ''}
+                    onBlur={(e) => {
+                      const v = e.target.value === '' ? null : Number(e.target.value);
+                      const was = a.amountCents != null ? a.amountCents / 100 : null;
+                      if (v !== was) void save(a.id, { amount: v });
+                    }}
+                    className={inputClass}
+                  />
+                </label>
+              ) : (
+                <label className="flex flex-col gap-1 text-sm">
+                  Weight %
+                  <input
+                    type="number"
+                    min={0}
+                    max={100}
+                    step="0.5"
+                    defaultValue={a.weightPct ?? ''}
+                    onBlur={(e) => {
+                      const v = e.target.value === '' ? null : Number(e.target.value);
+                      if (v !== a.weightPct) void save(a.id, { weightPct: v });
+                    }}
+                    className={inputClass}
+                  />
+                </label>
+              )}
               <label className="flex flex-col gap-1 text-sm">
                 Type
                 <select

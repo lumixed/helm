@@ -1,5 +1,6 @@
 import {
   formatDuration,
+  planDay,
   rankAssignments,
   utcToLocal,
   type AgentState,
@@ -63,6 +64,38 @@ export async function buildBrief(
     planned > 0
       ? `About ${formatDuration(planned)} of focused work planned today.`
       : 'Nothing needs work today.';
+  // Money: bills due in the next 7 days (or overdue) with a known amount, totalled by code.
+  const bills = state.assignments
+    .filter((a) => a.type === 'bill' && a.amountCents && a.dueAt)
+    .filter((a) => new Date(a.dueAt!).getTime() < now.getTime() + 7 * 86_400_000)
+    .sort((a, b) => a.dueAt!.localeCompare(b.dueAt!));
+  const currency = bills[0]?.currency ?? 'CAD';
+  const sameCurrency = bills.filter((b) => (b.currency ?? 'CAD') === currency);
+  const money = sameCurrency.length
+    ? {
+        totalCents: sameCurrency.reduce((m, b) => m + (b.amountCents ?? 0), 0),
+        currency,
+        items: sameCurrency
+          .slice(0, 20)
+          .map((b) => ({ title: b.title, amountCents: b.amountCents!, dueAt: b.dueAt! })),
+      }
+    : null;
+  // Time-blocking: code places today's focus work around the calendar.
+  const plan = planDay(
+    focus.map((f) => ({ id: f.assignmentId, title: f.title, minutes: f.minutes })),
+    schedule,
+    now,
+    state.timezone,
+  );
+  const at = (iso: string) =>
+    new Intl.DateTimeFormat('en-CA', {
+      timeZone: state.timezone,
+      hour: 'numeric',
+      minute: '2-digit',
+    }).format(new Date(iso));
+  const planLine = plan.blocks.length
+    ? ` In ${plan.blocks.length} block${plan.blocks.length === 1 ? '' : 's'}, first at ${at(plan.blocks[0]!.start).replace(/\.$/, '')}.${plan.unplannedMinutes >= 15 ? ` ${formatDuration(plan.unplannedMinutes)} doesn't fit today.` : ''}`
+    : '';
   const draft: BriefDraft = {
     name: state.name,
     forDate: utcToLocal(now, state.timezone).slice(0, 10),
@@ -70,9 +103,7 @@ export async function buildBrief(
     focus,
     dueSoon,
     changes: state.changes.slice(0, 5),
-    capacity: schedule.length
-      ? `${capacity} ${schedule.length} thing${schedule.length === 1 ? '' : 's'} on your calendar.`
-      : capacity,
+    capacity: `${capacity}${planLine}${schedule.length ? ` ${schedule.length} thing${schedule.length === 1 ? '' : 's'} on your calendar.` : ''}`,
     notes: notes.slice(0, 15),
     schedule,
     timezone: state.timezone,
@@ -98,6 +129,9 @@ export async function buildBrief(
     dueSoon,
     changes: draft.changes,
     schedule,
+    blocks: plan.blocks,
+    unplannedMinutes: plan.unplannedMinutes,
+    money,
     capacity: draft.capacity,
     trigger,
     writer,

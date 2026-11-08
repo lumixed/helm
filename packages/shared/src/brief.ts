@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { AssignmentStatus } from './domain';
+import { WorkBlock } from './plan';
 
 /** One open assignment as the agent sees it (no syllabus text, no files). */
 export const StateAssignment = z.object({
@@ -11,6 +12,10 @@ export const StateAssignment = z.object({
   estMinutes: z.number().nullable(),
   progressPct: z.number(),
   status: AssignmentStatus,
+  /** For the money line (older backends omit these). */
+  type: z.string().optional(),
+  amountCents: z.number().int().nullable().optional(),
+  currency: z.string().nullable().optional(),
 });
 export type StateAssignment = z.infer<typeof StateAssignment>;
 
@@ -67,6 +72,21 @@ export const BriefContent = z.object({
   changes: AgentState.shape.changes,
   /** Today's calendar events, when Google Calendar is connected (older briefs: none). */
   schedule: z.array(ScheduleItem).max(30).default([]),
+  /** When to work on what today, placed by code around the calendar (older briefs: none). */
+  blocks: z.array(WorkBlock).max(20).default([]),
+  /** Minutes of today's focus work that did not fit in the day. */
+  unplannedMinutes: z.number().int().min(0).default(0),
+  /** Bills due in the next 7 days with known amounts, totalled by code. */
+  money: z
+    .object({
+      totalCents: z.number().int(),
+      currency: z.string(),
+      items: z
+        .array(z.object({ title: z.string(), amountCents: z.number().int(), dueAt: z.string() }))
+        .max(20),
+    })
+    .nullable()
+    .default(null),
   /** "About 4h planned" style line. */
   capacity: z.string().max(200),
   trigger: z.enum(['cron', 'manual', 'onboarding', 'change']),

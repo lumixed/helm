@@ -3,7 +3,7 @@ import { BriefContent, utcToLocal, type AgentState } from '@helm/shared';
 import type { Db } from '@/db';
 import { schema } from '@/db';
 import type { User } from '@/db/schema';
-import { eventTime, formatWhen } from './format';
+import { eventTime, formatMoney, formatWhen } from './format';
 
 import { describeChange } from './inbox';
 
@@ -50,6 +50,9 @@ export async function agentState(db: Db, user: User): Promise<AgentState> {
         title: r.a.title,
         dueAt: r.a.dueAt?.toISOString() ?? null,
         weightPct: r.a.weightPct,
+        type: r.a.type,
+        amountCents: r.a.amountCents,
+        currency: r.a.currency,
         estMinutes: r.a.estMinutes,
         progressPct: r.a.progressPct,
         status: r.a.status,
@@ -109,6 +112,30 @@ export async function todaysBrief(db: Db, user: User, now = new Date()) {
     focus: parsed.data.focus.map(label),
     dueSoon: parsed.data.dueSoon.map(label),
     schedule: parsed.data.schedule.map((e) => ({ ...e, timeLabel: eventTime(e, user.timezone) })),
+    moneyLine: parsed.data.money
+      ? `Bills this week: ${formatMoney(parsed.data.money.totalCents, parsed.data.money.currency)} (${parsed.data.money.items
+          .map((i) => `${i.title} ${formatMoney(i.amountCents, parsed.data.money!.currency)}`)
+          .join(', ')})`
+      : null,
+    /** Calendar events and work blocks, in time order: "Your day". */
+    day: [
+      ...parsed.data.schedule.map((e) => ({
+        kind: 'event' as const,
+        title: e.title,
+        start: e.start,
+        allDay: e.allDay,
+        label: eventTime(e, user.timezone),
+        detail: e.location ?? null,
+      })),
+      ...parsed.data.blocks.map((b) => ({
+        kind: 'work' as const,
+        title: b.title,
+        start: b.start,
+        allDay: false,
+        label: `${eventTime({ allDay: false, start: b.start }, user.timezone)}–${eventTime({ allDay: false, start: b.end }, user.timezone)}`,
+        detail: null,
+      })),
+    ].sort((a, b) => (a.allDay === b.allDay ? a.start.localeCompare(b.start) : a.allDay ? -1 : 1)),
   };
 }
 export type TodaysBrief = NonNullable<Awaited<ReturnType<typeof todaysBrief>>>;

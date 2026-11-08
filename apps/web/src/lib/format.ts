@@ -32,3 +32,10 @@ export function eventTime(e: { allDay: boolean; start: string }, tz: string): st
         new Date(e.start),
       );
 }
+
+/** "$1,245.00" in the given currency (CAD if unknown). */
+export function formatMoney(cents: number, currency: string | null | undefined): string {
+  return new Intl.NumberFormat('en-CA', { style: 'currency', currency: currency || 'CAD' }).format(
+    cents / 100,
+  );
+}

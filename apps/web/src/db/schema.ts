@@ -151,6 +151,9 @@ export const assignments = pgTable(
     dueAt: timestamp('due_at', { withTimezone: true }),
     weightPct: real('weight_pct'),
     estMinutes: integer('est_minutes'),
+    /** For bills: the amount in cents and its currency (ISO code), when known. */
+    amountCents: integer('amount_cents'),
+    currency: text('currency'),
     progressPct: integer('progress_pct').notNull().default(0),
     type: assignmentTypeEnum('type').notNull().default('assignment'),
     allowedFileTypes: text('allowed_file_types')

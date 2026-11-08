@@ -33,6 +33,7 @@ interface Case {
   dueLocal?: string;
   decision: string[];
   injection?: boolean;
+  amount?: number;
 }
 const cases: Case[] = [
   {
@@ -205,6 +206,19 @@ cases.push(
     decision: ['review'],
   },
   {
+    name: 'Text: phone bill with amount',
+    email: {
+      source: 'sms',
+      from: 'Phone company',
+      subject: '',
+      receivedAt: at,
+      body: 'Your phone bill of $45.50 CAD is due on November 20. Pay in the app to avoid a late fee.',
+    },
+    kind: ['new_assignment'],
+    decision: ['review'],
+    amount: 45.5,
+  },
+  {
     name: 'Text: chit-chat',
     email: {
       source: 'sms',
@@ -255,6 +269,8 @@ for (const c of cases) {
   if (c.dueLocal && local(change.newDueAt) !== c.dueLocal)
     problems.push(`due ${local(change.newDueAt)}`);
   if (!c.decision.includes(d.decision)) problems.push(`decision ${d.decision}`);
+  if (c.amount !== undefined && change.amount !== c.amount)
+    problems.push(`amount ${change.amount}`);
   if (c.injection !== undefined && change.injectionSuspected !== c.injection)
     problems.push(`injection ${change.injectionSuspected}`);
   if (problems.length === 0) pass++;

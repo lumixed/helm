@@ -14,3 +14,4 @@ export * from './reminders';
 export * from './routines';
 export * from './review';
 export * from './followups';
+export * from './plan';

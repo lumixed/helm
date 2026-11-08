@@ -3,6 +3,7 @@ import {
   LLM_EXTRACTION_JSON_SCHEMA,
   LlmExtraction,
   localToUtc,
+  normalizeMoney,
   type LlmAssignment,
 } from '@helm/shared';
 import { llmJson, type GeminiOptions } from '../llm/gemini';
@@ -53,6 +54,8 @@ Return every deliverable, payment, appointment or required action that has (or c
 - If there is no usable date (e.g. "the week of Nov 30"), set dueLocal to null, explain in
   "assumption", and use confidence <= 0.5.
 - allowedFileTypes: extensions without dots, only if the document says so; otherwise [].
+- amount and currency: for a bill or payment, the amount as a plain number (1200, 45.50) and the
+  ISO currency code if the document shows one (CAD, USD); otherwise null for both.
 - evidence: a short exact quote (max 200 chars) that supports the date.
 - confidence: 0.9+ when the date and time are stated plainly; lower when you inferred anything.
 
@@ -115,6 +118,7 @@ export function normalize(row: LlmAssignment, timezone: string): Normalized {
     dueTimeAssumed: row.dueTimeAssumed,
     assumption: assumption?.slice(0, 300),
     weightPct: row.weightPct == null ? null : clamp(row.weightPct, 0, 100),
+    ...normalizeMoney(row.amount, row.currency),
     type: row.type,
     allowedFileTypes: row.allowedFileTypes
       .map((t) => t.trim().toLowerCase().replace(/^\./, ''))

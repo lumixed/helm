@@ -102,17 +102,33 @@ export function BriefCard({
                 ))}
               </ol>
             )}
-            {brief.schedule.length > 0 && (
+            {brief.day.length > 0 && (
               <div>
-                <h3 className="font-medium">Your calendar today</h3>
-                <ul className="text-sm">
-                  {brief.schedule.map((e, i) => (
-                    <li key={i}>
-                      <span className="tabular-nums text-muted">{e.timeLabel}</span> · {e.title}
-                      {e.location ? ` (${e.location})` : ''}
+                <h3 className="font-medium">Your day</h3>
+                <ol className="mt-1 flex flex-col gap-1 text-sm">
+                  {brief.day.map((d, i) => (
+                    <li key={i} className="flex gap-2">
+                      <span className="w-36 shrink-0 tabular-nums text-muted">{d.label}</span>
+                      <span>
+                        {d.kind === 'work' ? (
+                          <>
+                            <span className="sr-only">Work block: </span>
+                            <strong className="font-medium">{d.title}</strong>
+                          </>
+                        ) : (
+                          <>
+                            <span className="sr-only">Calendar: </span>
+                            {d.title}
+                            {d.detail ? ` (${d.detail})` : ''}
+                          </>
+                        )}
+                      </span>
                     </li>
                   ))}
-                </ul>
+                </ol>
+                <p className="mt-1 text-xs text-muted">
+                  Bold is focused work Helm fitted around your calendar.
+                </p>
               </div>
             )}
             {brief.changes.length > 0 && (
@@ -133,6 +149,7 @@ export function BriefCard({
                 Also due in the next 3 days: {brief.dueSoon.map((d) => d.title).join(', ')}.
               </p>
             )}
+            {brief.moneyLine && <p className="text-sm">{brief.moneyLine}</p>}
             <p className="text-sm text-muted">{brief.capacity}</p>
           </>
         )}

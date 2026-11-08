@@ -5,6 +5,7 @@ import {
   injectionSignals,
   localToUtc,
   mentionsAssignment,
+  normalizeMoney,
   utcToLocal,
   type StateAssignment,
 } from '@helm/shared';
@@ -85,6 +86,8 @@ Rules:
   "Friday" means the next Friday on or after that date. If the email moves the date but gives no
   time, keep the assignment's current time and set dueTimeAssumed=false only if the email says the
   time is unchanged; otherwise use the current time and set dueTimeAssumed=true.
+- For a bill or payment: amount (plain number) and currency (ISO code like CAD) when the message
+  gives them; otherwise null.
 - For new_assignment: newTitle, courseCode (the area: a course code, or "Work", "Rent", "Health"...),
   type, newDueLocal (23:59 and dueTimeAssumed=true if no time).
 - evidence: a short EXACT quote (max 200 chars) from the email that supports the change.
@@ -154,6 +157,7 @@ export function normalizeClassification(
     title: row.newTitle?.trim().slice(0, 300) || null,
     courseCode: row.courseCode?.trim().toUpperCase().slice(0, 40) || target?.courseCode || null,
     weightPct: row.weightPct,
+    ...normalizeMoney(row.amount, row.currency),
     type: row.type,
     requirementNote: row.requirementNote?.trim().slice(0, 1000) || null,
     confidence,

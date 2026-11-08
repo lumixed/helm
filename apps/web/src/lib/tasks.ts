@@ -47,6 +47,8 @@ export async function addTaskFromChat(db: Db, user: User, t: TaskCreateRequest) 
         title: t.title,
         dueAt: new Date(t.dueAt),
         type: t.type,
+        amountCents: t.amount != null ? Math.round(t.amount * 100) : null,
+        currency: t.amount != null ? (t.currency ?? null) : null,
         source: 'manual',
         sourceRef: ref,
         confidence: 1,

@@ -50,6 +50,12 @@ export const ExtractedAssignment = z.object({
   /** Plain-language note on any timezone or time assumption, shown on the review screen. */
   assumption: z.string().max(300).optional(),
   weightPct: z.number().min(0).max(100).nullable(),
+  /** Bills: amount in major units (45.5 = $45.50) and ISO currency, when the source says. */
+  amount: z.number().min(0).max(10_000_000).nullish(),
+  currency: z
+    .string()
+    .regex(/^[A-Z]{3}$/)
+    .nullish(),
   type: AssignmentType.default('assignment'),
   allowedFileTypes: z.array(FileExt).max(20).default([]),
   notes: z.string().max(1000).optional(),
@@ -77,6 +83,8 @@ export const LlmAssignment = z.object({
   dueTimeAssumed: z.boolean(),
   assumption: z.string().nullable(),
   weightPct: z.number().min(0).max(100).nullable(),
+  amount: z.number().min(0).nullish(),
+  currency: z.string().nullish(),
   type: AssignmentType,
   allowedFileTypes: z.array(z.string()),
   notes: z.string().nullable(),
@@ -111,6 +119,8 @@ export const LLM_EXTRACTION_JSON_SCHEMA = {
           'dueTimeAssumed',
           'assumption',
           'weightPct',
+          'amount',
+          'currency',
           'type',
           'allowedFileTypes',
           'notes',
@@ -141,6 +151,11 @@ export const LLM_EXTRACTION_JSON_SCHEMA = {
             type: ['number', 'null'],
             description: 'Percent of the final grade for THIS item',
           },
+          amount: {
+            type: ['number', 'null'],
+            description: 'For a bill or payment: the amount as a plain number, no symbol',
+          },
+          currency: { type: ['string', 'null'], description: 'ISO code like CAD or USD, if shown' },
           type: { type: 'string', enum: [...ASSIGNMENT_TYPES] },
           allowedFileTypes: {
             type: 'array',
@@ -166,3 +181,16 @@ export const ExtractionResult = z.object({
   warnings: z.array(z.string().max(500)).max(50).default([]),
 });
 export type ExtractionResult = z.infer<typeof ExtractionResult>;
+
+/** A model's amount and currency as validated values (amount rounded to cents, ISO code). */
+export function normalizeMoney(
+  amount: number | null | undefined,
+  currency: string | null | undefined,
+) {
+  const a =
+    typeof amount === 'number' && Number.isFinite(amount) && amount > 0 && amount < 10_000_000
+      ? Math.round(amount * 100) / 100
+      : null;
+  const c = currency?.trim().toUpperCase() ?? '';
+  return { amount: a, currency: a !== null && /^[A-Z]{3}$/.test(c) ? c : null };
+}

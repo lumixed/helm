@@ -45,7 +45,10 @@ describe('buildBrief', () => {
     expect(b.focus.map((f) => f.title)).toEqual(['soon', 'mid', 'next']);
     expect(b.dueSoon).toEqual([]);
     expect(b.focus[0]?.minutes).toBe(120);
-    expect(b.capacity).toBe('About 6h of focused work planned today.');
+    expect(b.capacity).toBe(
+      'About 6h of focused work planned today. In 6 blocks, first at 9:00 a.m.',
+    );
+    expect(b.blocks.length).toBe(6);
     expect(b.forDate).toBe('2026-11-09');
     expect(b.writer).toBe('template');
   });

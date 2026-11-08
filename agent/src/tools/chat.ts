@@ -39,6 +39,9 @@ export const ChatTask = z.object({
   type: z.enum(['task', 'appointment', 'bill', 'assignment', 'event']),
   /** Course code or area of life ("DATA 210", "Work", "Health"). */
   area: z.string().max(40).nullish(),
+  /** Bills: amount and ISO currency when the person said them. */
+  amount: z.number().nullish(),
+  currency: z.string().max(3).nullish(),
 });
 export type ChatTask = z.infer<typeof ChatTask>;
 
@@ -137,6 +140,8 @@ export const CHAT_JSON_SCHEMA = {
           type: ['string', 'null'],
           description: 'Course code, or Work / Home / Health / Money',
         },
+        amount: { type: ['number', 'null'], description: 'For a bill: the amount, plain number' },
+        currency: { type: ['string', 'null'], description: 'ISO code like CAD, if they said it' },
       },
     },
     reminder: {
@@ -221,7 +226,8 @@ attend by a time ("I need to finish the lab report by Friday", "dentist Tuesday 
 due the 20th"). Set intent "task" and fill "task": a short title; dueLocal YYYY-MM-DDTHH:mm in
 their local time (23:59 if they gave no time; work out dates from today's date above); type
 (appointment for a visit or meeting, bill for a payment, assignment for school work, event to
-attend, otherwise task); area (course code, or Work / Home / Health / Money). In "reply" restate it
+attend, otherwise task); area (course code, or Work / Home / Health / Money); for a bill, amount
+and currency if they said them ("phone bill $45 due the 20th"). In "reply" restate it
 briefly; Helm confirms it.
 4) Mark an item done when they say they finished, paid or handed it in ("I finished the lab
 report", "paid rent"). Set intent "done" and doneRef to the item's [A…] ref from the list below.

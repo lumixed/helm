@@ -46,6 +46,8 @@ export const LlmEmailClassification = z.object({
   newTitle: z.string().nullable(),
   courseCode: z.string().nullable(),
   weightPct: z.number().min(0).max(100).nullable(),
+  amount: z.number().min(0).nullish(),
+  currency: z.string().nullish(),
   type: AssignmentType.nullable(),
   requirementNote: z.string().nullable(),
   confidence: z.number().min(0).max(1),
@@ -71,6 +73,8 @@ export const LLM_EMAIL_JSON_SCHEMA = {
     'newTitle',
     'courseCode',
     'weightPct',
+    'amount',
+    'currency',
     'type',
     'requirementNote',
     'confidence',
@@ -87,6 +91,11 @@ export const LLM_EMAIL_JSON_SCHEMA = {
     newTitle: nullableString('Title of a NEW deliverable (new_assignment only)'),
     courseCode: nullableString('Course code like "DATA 210"'),
     weightPct: { type: ['number', 'null'] },
+    amount: {
+      type: ['number', 'null'],
+      description: 'For a bill or payment: the amount, no symbol',
+    },
+    currency: { type: ['string', 'null'], description: 'ISO code like CAD or USD, if shown' },
     type: { type: ['string', 'null'], enum: [...AssignmentType.options, null] },
     requirementNote: nullableString('What changed about the requirements, in plain words'),
     confidence: { type: 'number', description: '0 to 1' },
@@ -109,6 +118,12 @@ export const EmailChange = z.object({
   title: z.string().max(300).nullable(),
   courseCode: z.string().max(40).nullable(),
   weightPct: z.number().min(0).max(100).nullable(),
+  /** Bills: amount in major units and ISO currency, when the message says. */
+  amount: z.number().min(0).max(10_000_000).nullish(),
+  currency: z
+    .string()
+    .regex(/^[A-Z]{3}$/)
+    .nullish(),
   type: AssignmentType.nullable(),
   requirementNote: z.string().max(1000).nullable(),
   confidence: z.number().min(0).max(1),
@@ -152,6 +167,11 @@ export const TaskCreateRequest = z.object({
   dueAt: z.iso.datetime({ offset: true }),
   type: z.enum(['task', 'appointment', 'bill', 'assignment', 'event']),
   area: z.string().max(40).nullable(),
+  amount: z.number().min(0).max(10_000_000).nullish(),
+  currency: z
+    .string()
+    .regex(/^[A-Z]{3}$/)
+    .nullish(),
 });
 export type TaskCreateRequest = z.infer<typeof TaskCreateRequest>;
 
