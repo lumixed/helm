@@ -259,6 +259,7 @@ describe('egress allowlist', () => {
     state.agents.get('mt_1')!.status = 'active';
     await refreshAgent(db, user, client);
     expect(state.network.get('mt_1')).toEqual([
+      '*.instructure.com',
       '*.sb.mtm.sh',
       'generativelanguage.googleapis.com',
       'helm.test',

@@ -19,6 +19,8 @@ export function egressAllowlist(env: NodeJS.ProcessEnv = process.env): string[] 
   for (const h of (env.EGRESS_LLM_HOSTS ?? 'generativelanguage.googleapis.com').split(','))
     if (h.trim()) hosts.add(h.trim());
   for (const h of (env.EGRESS_ALLOWLIST ?? '').split(',')) if (h.trim()) hosts.add(h.trim());
+  // Canvas calendar feeds (S3): the agent fetches the person's own feed.
+  hosts.add('*.instructure.com');
   // Throwaway sandboxes (WP-6): each one's data plane is api-<id>.<region>.sb.mtm.sh.
   if (env.SANDBOX_PARSING !== 'off') hosts.add('*.sb.mtm.sh');
   // Read-only Gmail (PRD v3): only Google's token endpoint and the Gmail API, nothing else.

@@ -3,7 +3,10 @@ import {
   utcToLocal,
   type AgentMessage,
   AgentSubmissionJob,
+  CalendarResultResponse,
   InboxResultResponse,
+  calendarItems,
+  parseIcs,
   SOURCE_LABEL,
   blocking,
   runSubmissionChecks,
@@ -88,6 +91,8 @@ export interface HandlerDeps {
     history: ChatTurn[],
     now: Date,
   ) => Promise<ChatReply & { model: string }>;
+  /** Fetch a calendar feed's text (bounded). */
+  fetchFeed: (url: string) => Promise<string>;
   /** Read-only Gmail, or null when not connected. */
   gmail: () => GmailReader | null;
 }
@@ -164,6 +169,13 @@ const defaultDeps = (): HandlerDeps => ({
         req,
       ),
     ),
+  fetchFeed: async (url) => {
+    const res = await fetch(url, { signal: AbortSignal.timeout(15_000), redirect: 'follow' });
+    if (!res.ok) throw new Error(`feed HTTP ${res.status}`);
+    const text = await res.text();
+    if (text.length > 2_000_000) throw new Error('feed larger than 2 MB');
+    return text;
+  },
   now: () => new Date(),
   dataDir: DATA_DIR,
   driver: () => {
@@ -187,6 +199,7 @@ const WAKE_REASONS: Record<AgentMessage['type'], string> = {
   'submission.run': 'Woke to submit homework',
   'redteam.egress': 'Woke for a red-team simulation',
   'gmail.sync': 'Woke to check your Gmail',
+  'calendar.sync': 'Woke to sync your Canvas calendar',
 };
 
 /**
@@ -239,12 +252,25 @@ export async function handleMessage(msg: AgentMessage, ctx: HandlerContext): Pro
       reply = await handleRedteam(msg, requestId, woke, ctx);
       break;
     }
+    case 'calendar.sync': {
+      reply = await handleCalendarSync(
+        msg.payload.reason,
+        msg.payload.feedUrl,
+        requestId,
+        woke,
+        ctx,
+      );
+      break;
+    }
     case 'gmail.sync': {
       reply = await handleGmailSync(msg.payload.reason, requestId, woke, ctx);
       break;
     }
     case 'heartbeat': {
       reply = await handleHeartbeat(ctx);
+      // The heartbeat also syncs the calendar feed, at most hourly (quiet unless something changed).
+      if (process.env.CANVAS_ICS_URL)
+        reply += ` | ${await handleCalendarSync('heartbeat', undefined, requestId, woke, ctx)}`;
       // The heartbeat is also when new Gmail is read (quietly unless something arrived).
       if ((ctx.deps?.gmail ?? defaultDeps().gmail)())
         reply += ` | ${await handleGmailSync('heartbeat', requestId, woke, ctx)}`;
@@ -1047,4 +1073,91 @@ export async function handleChat(
       ctx,
     ).catch((err: unknown) => console.error('[chat] brief failed', err));
   return r.reply;
+}
+
+/**
+ * Read the person's calendar feed (Canvas). The link is an encrypted env var on this agent only;
+ * the agent fetches it, keeps deadlines, and reports them. New ones go to review; moved ones are
+ * updated by the backend with "Canvas calendar" as the source.
+ */
+async function handleCalendarSync(
+  reason: 'connected' | 'manual' | 'heartbeat',
+  localFeedUrl: string | undefined,
+  requestId: string,
+  woke: ReturnType<Emitter['event']>,
+  ctx: HandlerContext,
+): Promise<string> {
+  const deps = { ...defaultDeps(), ...ctx.deps };
+  const url = process.env.CANVAS_ICS_URL || localFeedUrl;
+  const quiet = reason === 'heartbeat';
+  if (!url) return 'calendar: not connected';
+  const stateFile = path.join(deps.dataDir, 'calendar', 'state.json');
+  const nowMs = deps.now().getTime();
+  if (quiet) {
+    try {
+      const last = (JSON.parse(await fs.readFile(stateFile, 'utf8')) as { lastSyncMs: number })
+        .lastSyncMs;
+      if (nowMs - last < 60 * 60_000) return 'calendar: synced recently';
+    } catch {
+      /* first sync */
+    }
+  }
+  const emit = (
+    type: 'intake.parsed' | 'agent.error',
+    reasonText: string,
+    payload: Record<string, unknown>,
+  ) =>
+    ctx.emitter.emit(
+      woke,
+      ctx.emitter.event({
+        eventId: `${requestId}:calendar`,
+        requestId,
+        type,
+        reason: reasonText,
+        payload,
+      }),
+    );
+  let items;
+  let total: number;
+  try {
+    const events = parseIcs(await deps.fetchFeed(url), runtime().timezone);
+    total = events.length;
+    items = calendarItems(events, runtime().timezone, deps.now());
+  } catch (err) {
+    await emit(
+      'agent.error',
+      "Couldn't read your Canvas calendar feed. Check the link in Settings.",
+      {
+        stage: 'calendar',
+        detail: String(err).slice(0, 200),
+      },
+    );
+    return 'calendar: fetch failed';
+  }
+  let r: CalendarResultResponse;
+  try {
+    const res = await deps.post('/api/agent/calendar/result', {
+      studentId: runtime().studentId,
+      requestId,
+      items,
+      total,
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    r = CalendarResultResponse.parse(await res.json());
+  } catch (err) {
+    await emit('agent.error', 'Read your Canvas calendar but could not save it.', {
+      stage: 'calendar',
+      detail: String(err).slice(0, 200),
+    });
+    return 'calendar: save failed';
+  }
+  await fs.mkdir(path.dirname(stateFile), { recursive: true });
+  await fs.writeFile(stateFile, JSON.stringify({ lastSyncMs: nowMs }));
+  if (!quiet || r.added || r.moved)
+    await emit(
+      'intake.parsed',
+      `Synced your Canvas calendar: ${r.added} new to check, ${r.moved} moved${r.unchanged ? `, ${r.unchanged} unchanged` : ''}`,
+      { source: 'canvas', count: items.length, total, ...r },
+    );
+  return `calendar: ${r.added} new, ${r.moved} moved`;
 }

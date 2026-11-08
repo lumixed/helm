@@ -62,7 +62,7 @@ export async function saveIntakeResult(
   userId: string,
   intakeId: string,
   rows: ExtractedAssignment[],
-  source: 'syllabus' | 'email' = 'syllabus',
+  source: 'syllabus' | 'email' | 'ics' = 'syllabus',
 ) {
   const courseIds = new Map<string, string>();
   for (const code of new Set(rows.map((r) => normalizeCourseCode(r.courseCode)).filter(Boolean))) {

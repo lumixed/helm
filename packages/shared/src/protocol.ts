@@ -17,6 +17,7 @@ export const AGENT_MESSAGE_TYPES = [
   'submission.run',
   'redteam.egress',
   'gmail.sync',
+  'calendar.sync',
 ] as const;
 
 export const AgentMessageType = z.enum(AGENT_MESSAGE_TYPES);
@@ -111,7 +112,21 @@ export const GmailSyncMessage = z.object({
     }),
 });
 
+/** Read the person's calendar feed (Canvas). The link lives in this agent's encrypted env. */
+export const CalendarSyncMessage = z.object({
+  ...base,
+  type: z.literal('calendar.sync'),
+  payload: z
+    .object({
+      reason: z.enum(['connected', 'manual', 'heartbeat']).default('manual'),
+      /** LOCAL DEVELOPMENT ONLY (no Maritime env there). Production never sends the link. */
+      feedUrl: z.url().optional(),
+    })
+    .default({ reason: 'manual' }),
+});
+
 export const AgentMessage = z.discriminatedUnion('type', [
+  CalendarSyncMessage,
   GmailSyncMessage,
   RedteamEgressMessage,
   PingMessage,

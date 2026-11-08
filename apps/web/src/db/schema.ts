@@ -70,6 +70,10 @@ export const users = pgTable(
     /** Gmail address connected read-only. The token itself lives only in the agent's encrypted env. */
     gmailAddress: text('gmail_address'),
     gmailConnectedAt: timestamp('gmail_connected_at', { withTimezone: true }),
+    /** Calendar feed (Canvas): only the host is kept here; the link lives in the agent's env. */
+    calendarHost: text('calendar_host'),
+    calendarConnectedAt: timestamp('calendar_connected_at', { withTimezone: true }),
+    calendarSyncedAt: timestamp('calendar_synced_at', { withTimezone: true }),
     onboardedAt: timestamp('onboarded_at', { withTimezone: true }),
     createdAt: createdAt(),
   },

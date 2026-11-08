@@ -1,5 +1,7 @@
 import { AgentStatus } from '@/components/AgentStatus';
 import { GmailCard } from '@/components/GmailCard';
+import { CalendarCard } from '@/components/CalendarCard';
+import { formatWhen } from '@/lib/format';
 import { MessagingAppsCard } from '@/components/MessagingAppsCard';
 import { computersFromEnv } from '@/lib/computers';
 import { listApps } from '@/lib/desktop';
@@ -57,6 +59,13 @@ export default async function SetupPage({
           <h2 id="connections-h" className="pt-2 text-[17px] font-semibold tracking-tight text-ink">
             Connections
           </h2>
+          <CalendarCard
+            host={full.calendarHost}
+            syncedLabel={
+              full.calendarSyncedAt ? formatWhen(full.calendarSyncedAt, full.timezone) : null
+            }
+            demo={process.env.DEMO_MODE === 'true'}
+          />
           {gmailConfig() && <GmailCard address={full.gmailAddress} result={gmail} />}
           {computersFromEnv() && process.env.GEMINI_API_KEY && (
             <MessagingAppsCard initial={await listApps(await getDb(), full)} />
