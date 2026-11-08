@@ -15,8 +15,23 @@ Built at HackCamp 2026. Specs: [`docs/PRD.md`](docs/PRD.md) (v1),
 > and shared messages with provenance; scheduled hand-ins to a demo portal with hold notice, retries,
 > receipts and alerts; read-only Gmail with the token only in the agent's encrypted env; installable
 > app with a share target; timeline with Maritime lifecycle webhooks; per-agent egress allowlist.
-> Not built yet: policy panel, `/maritime` scorecard, sandbox parsing, desktop hand-ins.
+> Under the hood: a live `/maritime` scorecard shows each Maritime feature in use, from real data.
+> Not built yet: policy panel, sandbox parsing, desktop hand-ins.
 > Helm does not read WhatsApp or Instagram by itself: people share messages with it.
+
+## Screenshots
+
+| Today (phone)                                                                                   | Review what the agent found                                                                                        | Hand in, with your OK                                                                       |
+| ----------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------- |
+| ![Today on a phone: the morning brief with three focus items](docs/screenshots/today-phone.png) | ![Review screen: extracted deadlines with the syllabus quote and assumptions](docs/screenshots/review-desktop.png) | ![A scheduled hand-in with Hold, Submit now and Cancel](docs/screenshots/hand-in-phone.png) |
+
+**Under the hood:** live evidence for every Maritime feature Helm uses, from the person's own agent.
+
+![Under the hood: scorecard of Maritime features with live evidence](docs/screenshots/under-the-hood-desktop.png)
+
+**Agent timeline:** a red-team simulation blocked by the network allowlist, confirmed by Maritime's own test.
+
+![Timeline showing a blocked outbound request and Maritime network tests](docs/screenshots/timeline-desktop.png)
 
 ## Layout
 
