@@ -15,3 +15,6 @@ agent/.deploy/
 apps/web/next-env.d.ts
 apps/mobile/.expo/
 apps/mobile/dist/
+
+# Written by `next dev` on every local run
+apps/web/AGENTS.md
