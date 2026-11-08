@@ -90,16 +90,22 @@ const BUTTON: Record<ButtonVariant, string> = {
   danger: 'border border-danger/40 bg-surface text-danger hover:bg-danger-soft',
 };
 
-export function buttonClass(variant: ButtonVariant = 'primary', className = '') {
-  return `inline-flex h-11 items-center justify-center gap-2 rounded-full px-6 text-sm font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${BUTTON[variant]} ${className}`;
+export function buttonClass(
+  variant: ButtonVariant = 'primary',
+  className = '',
+  size: 'md' | 'sm' = 'md',
+) {
+  const dims = size === 'sm' ? 'h-9 px-4' : 'h-11 px-6';
+  return `inline-flex ${dims} items-center justify-center gap-2 whitespace-nowrap rounded-full text-sm font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${BUTTON[variant]} ${className}`;
 }
 
 export function Button({
   variant = 'primary',
+  size = 'md',
   className = '',
   ...props
-}: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: ButtonVariant }) {
-  return <button {...props} className={buttonClass(variant, className)} />;
+}: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: ButtonVariant; size?: 'md' | 'sm' }) {
+  return <button {...props} className={buttonClass(variant, className, size)} />;
 }
 
 /** Pill input, 44px tall, matching the secondary button. */

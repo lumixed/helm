@@ -202,14 +202,14 @@ export function SubmissionsBoard({
               ? `The next ${fails} submit${fails === 1 ? '' : 's'} will fail.`
               : 'The portal is working normally.'}
           </p>
-          <div className="mt-3 flex gap-2">
-            <Button variant="danger" className="flex-1" onClick={() => setFailures(1)}>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <Button size="sm" variant="danger" onClick={() => setFailures(1)}>
               Fail once
             </Button>
-            <Button variant="danger" className="flex-1" onClick={() => setFailures(3)}>
+            <Button size="sm" variant="danger" onClick={() => setFailures(3)}>
               Fail every attempt
             </Button>
-            <Button variant="ghost" onClick={() => setFailures(0)}>
+            <Button size="sm" variant="ghost" onClick={() => setFailures(0)}>
               Reset
             </Button>
           </div>
