@@ -3,9 +3,11 @@ import { getDb } from '@/db';
 import { agentTransport } from '@/lib/agent-transport';
 import { bearer } from '@/lib/agent-auth';
 import { fail, json } from '@/lib/http';
+import { checkDue, desktopDepsFromEnv } from '@/lib/desktop';
 import { tick, tickDepsFor } from '@/lib/submissions';
 
 export const dynamic = 'force-dynamic';
+export const maxDuration = 60;
 
 /**
  * Advance the scheduler for every student. For an external pinger or Vercel Cron with
@@ -21,7 +23,9 @@ async function handle(req: Request): Promise<Response> {
   )
     return fail(401, 'unauthorized');
   const db = await getDb();
-  return json(await tick(db, tickDepsFor(db, agentTransport())));
+  const scheduler = await tick(db, tickDepsFor(db, agentTransport()));
+  const deps = await desktopDepsFromEnv();
+  return json({ ...scheduler, desktop: deps ? await checkDue(db, deps).catch(() => null) : null });
 }
 export const GET = handle;
 export const POST = handle;

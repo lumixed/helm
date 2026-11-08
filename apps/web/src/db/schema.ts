@@ -399,3 +399,29 @@ export const portalState = pgTable('portal_state', {
 
 export type Submission = typeof submissions.$inferSelect;
 export type PortalSubmission = typeof portalSubmissions.$inferSelect;
+
+/**
+ * Messaging apps read through the person's own Maritime desktop (PRD v3, WP-7): WhatsApp Web,
+ * Instagram. The login lives only in that desktop's browser; Helm reads chat-list previews.
+ */
+export const desktopApps = pgTable(
+  'desktop_apps',
+  {
+    id: id(),
+    userId: userRef(),
+    /** whatsapp | instagram */
+    app: text('app').notNull(),
+    computerId: text('computer_id').notNull(),
+    /** linking (waiting for the person's login) | linked | needs_login | disconnected | error */
+    status: text('status').notNull().default('linking'),
+    linkedAt: timestamp('linked_at', { withTimezone: true }),
+    lastCheckAt: timestamp('last_check_at', { withTimezone: true }),
+    lastError: text('last_error'),
+    /** Keys (hashes) of previews already handled, newest last. Never the text. */
+    seenJson: jsonb('seen_json').$type<string[]>().notNull().default([]),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [uniqueIndex('desktop_apps_user_app_uq').on(t.userId, t.app)],
+);
+export type DesktopApp = typeof desktopApps.$inferSelect;

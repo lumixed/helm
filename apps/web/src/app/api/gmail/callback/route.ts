@@ -10,7 +10,7 @@ export const dynamic = 'force-dynamic';
 /** Google → Helm. Checks the signed state belongs to the signed-in user, then connects. */
 export async function GET(req: Request): Promise<Response> {
   const url = new URL(req.url);
-  const back = (q: string) => Response.redirect(new URL(`/today?gmail=${q}`, url), 302);
+  const back = (q: string) => Response.redirect(new URL(`/setup?gmail=${q}`, url), 302);
   const user = await currentUser();
   const stateUser = verifyState(url.searchParams.get('state') ?? '');
   if (!user || !stateUser || stateUser !== user.id) return back('error');

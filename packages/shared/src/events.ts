@@ -27,6 +27,8 @@ export const AGENT_EVENT_TYPES = [
   'submission.submitted',
   'submission.failed',
   'alert.sent',
+  'desktop.takeover',
+  'desktop.checked',
   'egress.blocked',
   'egress.allowed',
   'sandbox.created',

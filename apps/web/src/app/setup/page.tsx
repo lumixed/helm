@@ -1,5 +1,9 @@
 import { AgentStatus } from '@/components/AgentStatus';
 import { GmailCard } from '@/components/GmailCard';
+import { MessagingAppsCard } from '@/components/MessagingAppsCard';
+import { computersFromEnv } from '@/lib/computers';
+import { listApps } from '@/lib/desktop';
+import { getDb } from '@/db';
 import { SetupForm } from '@/components/SetupForm';
 import { SignOutButton } from '@/components/SignOutButton';
 import { TelegramCard } from '@/components/TelegramCard';
@@ -11,7 +15,12 @@ import { telegramToken } from '@/lib/telegram';
 
 export const dynamic = 'force-dynamic';
 
-export default async function SetupPage() {
+export default async function SetupPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ gmail?: string }>;
+}) {
+  const { gmail } = await searchParams;
   const { user, agent } = await requireProfile();
   const full = (await currentUser())!;
   return (
@@ -35,7 +44,10 @@ export default async function SetupPage() {
           <h2 id="connections-h" className="pt-2 text-[17px] font-semibold tracking-tight text-ink">
             Connections
           </h2>
-          {gmailConfig() && <GmailCard address={full.gmailAddress} />}
+          {gmailConfig() && <GmailCard address={full.gmailAddress} result={gmail} />}
+          {computersFromEnv() && process.env.GEMINI_API_KEY && (
+            <MessagingAppsCard initial={await listApps(await getDb(), full)} />
+          )}
           {telegramToken() && <TelegramCard linked={user.telegramLinked} />}
           <Card>
             <details>
