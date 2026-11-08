@@ -149,6 +149,32 @@ Maritime documents no one-off timed triggers, so exact-time work is ours: `tick(
 
 After `POST /api/agents/{id}/reset-llm` (Maritime LLM on) on an account with **no AI credits**, the agent's logs show `Scheduled wake skipped: your LLM credits are exhausted, so this agent was left asleep` for every cron fire, starting at the next one. Webhook and chat wakes still work, and our agent's Gemini fallback still answered them. Only the agent with Maritime LLM on was affected. Removing `OPENAI_API_KEY`/`OPENAI_BASE_URL` and restarting is our revert. **Maritime LLM is therefore opt-in (`MARITIME_LLM=on`)** until the account has prepaid AI credits.
 
+## WP-7 spike: WhatsApp Web on a Maritime desktop (2026-11-07, GO)
+
+Goal (PRD v3): read messaging apps that have no personal-account API through the person's own private browser. Throwaway end user `helm_spike_desktop`, API key with full access, REST only (`/api/v1/computers`, shapes confirmed from `maritime-sdk` 0.11 `ComputersResource`).
+
+| Step                                                                                                 | Result                                                                                                                                                                                                                      | Time                |
+| ---------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------- |
+| `POST /api/v1/computers {externalUserId, name}`                                                      | 201, `status: ready`, `mode: agent`, Chromium already open on `about:blank`, screen 1280x800 (model frame 1200x750)                                                                                                         | 20 s (cold)         |
+| Open `web.whatsapp.com` (`POST …/actions` batch: `key ctrl+l`, `type`, `key Return`, `wait 8`)       | Login QR page, "Stay logged in" checked. Each action returns `imageB64` + `frameId` unless `no_screenshot`                                                                                                                  | 14 s incl. 8 s wait |
+| `GET …/screenshot?format=png`                                                                        | PNG bytes, headers `X-Screen-Width/Height`, `X-Frame-Id`                                                                                                                                                                    | 1.3–3.4 s           |
+| Takeover = `POST …/viewer {mode: "control", ttlS, reason}` → `{url, expiresAt, mode}`                | Person scanned the QR on their phone. While they held it: `mode: human`, agent screenshot refused with **409 `human_in_control`**, `retryAfterS: 15`. After they clicked Done: `mode: agent`, `lastTakeoverResult: success` | —                   |
+| Read chat list: PNG → Gemini `gemini-3.6-flash` (OpenAI-compatible, image_url data URI, JSON schema) | `screen: chat_list`, 6 chats, every one with name, preview and time; 3 unread                                                                                                                                               | 10–12 s             |
+| `POST …/sleep`, then `POST …/wake`                                                                   | Sleeping within 5 s; wake `lastWakeMethod: restore`, `lastWakeMs` 1236; **still logged in**, chat list read again                                                                                                           | 1.2 s wake          |
+| `POST …/viewer {mode: "watch"}`                                                                      | Watch-only link (`url`, `expiresAt`, `mode`)                                                                                                                                                                                | 0.4 s               |
+
+Chat names and messages were never printed or stored outside a private scratch file (deleted after), and no chat was opened (opening a chat marks it read on the phone).
+
+**Design decisions for the build:**
+
+- **Read previews only, never open chats or type.** Fixed action list per check (screenshot, scroll the chat list); no `type`, no clicks inside chats. A message can't make the agent send anything because sending is not an action Helm performs.
+- **The backend brokers desktop calls** (screenshot, actions, viewer) with the server key; the agent VM never holds a Computers-capable key (v2 section 4 rule). Text extracted from previews goes into the same classify → backend rule → timeline path as shared messages.
+- **Sleep explicitly after each check** (`POST …/sleep`): ~30 s awake per check; at one check per 15 min ≈ 48 min/day ≈ $0.10/day per person at $0.12/h. Counts against the 5-awake limit on Starter; checks must be staggered.
+- **Takeover = control viewer link** sent in the app and on Telegram; agent actions are refused by Maritime until Done.
+- Network allowlist applies to computers (`PUT /api/v1/network/workloads/computer/{id}`, per the Networks docs). WhatsApp Web needs several hosts (`web.whatsapp.com`, `*.whatsapp.net`, static CDNs): to measure before enabling `list` mode.
+
+**Risks:** Meta's terms forbid automated access to WhatsApp and Instagram; accounts can be flagged. Demo with test accounts and call it a prototype. Previews are truncated (long messages need opening the chat, which marks it read). Instagram is untested (password + 2FA through the same takeover).
+
 ## Open items
 
 - [x] Start the Maritime free trial.
