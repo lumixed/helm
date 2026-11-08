@@ -50,7 +50,11 @@ export function AppNav() {
             <span className="text-[17px] font-semibold tracking-tight">Helm</span>
           </Link>
           <nav aria-label="Main" className="hidden items-center gap-7 sm:flex">
-            {[...ITEMS, { href: '/maritime', label: 'Under the hood' }].map(({ href, label }) => (
+            {[
+              ...ITEMS,
+              { href: '/reminders', label: 'Reminders' },
+              { href: '/maritime', label: 'Under the hood' },
+            ].map(({ href, label }) => (
               <Link
                 key={href}
                 href={href}
@@ -67,7 +71,7 @@ export function AppNav() {
         aria-label="Main"
         className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-surface/95 pb-[env(safe-area-inset-bottom)] backdrop-blur sm:hidden"
       >
-        <ul className="mx-auto grid max-w-md grid-cols-5">
+        <ul className="mx-auto grid max-w-md grid-cols-6">
           {ITEMS.map(({ href, label, Icon }) => {
             const active = isActive(href);
             return (

@@ -18,6 +18,7 @@ export const AGENT_MESSAGE_TYPES = [
   'redteam.egress',
   'gmail.sync',
   'calendar.sync',
+  'reminder.due',
 ] as const;
 
 export const AgentMessageType = z.enum(AGENT_MESSAGE_TYPES);
@@ -125,7 +126,15 @@ export const CalendarSyncMessage = z.object({
     .default({ reason: 'manual' }),
 });
 
+/** A reminder's own Maritime cron fired. Carries only the id; the title stays in the settings file. */
+export const ReminderDueMessage = z.object({
+  ...base,
+  type: z.literal('reminder.due'),
+  payload: z.object({ reminderId: z.string().min(1).max(64) }),
+});
+
 export const AgentMessage = z.discriminatedUnion('type', [
+  ReminderDueMessage,
   CalendarSyncMessage,
   GmailSyncMessage,
   RedteamEgressMessage,

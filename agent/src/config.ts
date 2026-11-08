@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { AgentRuntimeConfig } from '@helm/shared';
+import { AgentRuntimeConfig, type ReminderSchedule } from '@helm/shared';
 
 /** Everything outside /data is disposable on Maritime (PRD section 7, "Memory"). */
 export const DATA_DIR =
@@ -34,6 +34,8 @@ export interface Runtime {
   briefTime: string;
   heartbeatCron: string;
   demoMode: boolean;
+  /** From the settings file only; each one is published as its own Maritime cron. */
+  reminders: ReminderSchedule[];
   /** Where the values came from, for the status endpoint. */
   source: 'env+file' | 'file' | 'env' | 'none';
   error?: string;
@@ -68,6 +70,7 @@ export function runtime(file = paths.runtimeConfig): Runtime {
         briefTime: f.briefTime ?? fromEnv.briefTime,
         heartbeatCron: f.heartbeatCron ?? fromEnv.heartbeatCron,
         demoMode: f.demoMode ?? fromEnv.demoMode,
+        reminders: f.reminders ?? [],
         source: fromEnv.studentId ? 'env+file' : 'file',
       };
     } else {
@@ -94,6 +97,7 @@ function envRuntime(): Runtime {
     briefTime: e.HELM_BRIEF_TIME ?? '07:30',
     heartbeatCron: e.HELM_HEARTBEAT_CRON ?? '*/15 * * * *',
     demoMode: e.DEMO_MODE === 'true',
+    reminders: [],
     source: studentId ? 'env' : 'none',
   };
 }

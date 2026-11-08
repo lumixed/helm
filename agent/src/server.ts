@@ -3,6 +3,7 @@ import {
   MaritimeChatBody,
   parseInbound,
   dailyCron,
+  reminderCron,
   encodeAgentMessage,
   type ScheduleEntry,
 } from '@helm/shared';
@@ -42,6 +43,21 @@ export function buildSchedules(): ScheduleEntry[] {
       }),
       enabled: true,
     },
+    // Each reminder is its own platform cron in the person's timezone. The prompt carries only
+    // the id; the agent reads the title from its own settings file when it wakes.
+    ...rt.reminders.map((r) => ({
+      id: `reminder-${r.id}`,
+      cron: reminderCron(r.rule),
+      tz: rt.timezone,
+      prompt: encodeAgentMessage({
+        v: 1,
+        type: 'reminder.due',
+        requestId: `cron:reminder:${r.id}`,
+        studentId,
+        payload: { reminderId: r.id },
+      }),
+      enabled: true,
+    })),
   ];
 }
 

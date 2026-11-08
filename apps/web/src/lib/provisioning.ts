@@ -5,12 +5,14 @@ import {
   AGENT_ENV,
   AgentRuntimeConfig,
   type AgentRuntimeConfigInput,
+  type ReminderSchedule,
 } from '@helm/shared';
 import type { Db } from '@/db';
 import { schema } from '@/db';
 import type { AgentRow, User } from '@/db/schema';
 import { generateAgentToken } from './agent-auth';
 import { ensureEgressPolicy } from './network';
+import { activeSchedules } from './reminders';
 import { portalBaseUrl, portalCredentials } from './portal';
 import {
   MaritimeError,
@@ -187,7 +189,11 @@ export async function refreshAgent(
     const status = STATUS_MAP[remote.status] ?? row.status;
     const lastError = row.lastError?.startsWith('Agent already existed') ? row.lastError : null;
     await setAgent(db, row.id, { status: lastError ? 'error' : status, lastError });
-    if (!lastError && (status === 'ready' || status === 'asleep') && settingsStale(row, user)) {
+    if (
+      !lastError &&
+      (status === 'ready' || status === 'asleep') &&
+      settingsStale(row, user, await activeSchedules(db, user))
+    ) {
       await writeAgentSettings(db, user, maritime);
     }
     if (!lastError) {
@@ -209,13 +215,19 @@ export async function refreshAgent(
 }
 
 /** The settings file content for a student. Contains no secrets. */
-export function agentSettings(user: User, appBaseUrl = process.env.APP_BASE_URL): string {
+export function agentSettings(
+  user: User,
+  reminders: ReminderSchedule[] = [],
+  appBaseUrl = process.env.APP_BASE_URL,
+): string {
   const settings: AgentRuntimeConfigInput = {
     v: 1,
     ...(appBaseUrl ? { backendUrl: appBaseUrl.replace(/\/+$/, '') } : {}),
     timezone: user.timezone,
     briefTime: user.briefTimeLocal,
     demoMode: process.env.DEMO_MODE === 'true',
+    // Each one becomes its own Maritime cron on the agent (GET /schedules).
+    ...(reminders.length ? { reminders } : {}),
   };
   return JSON.stringify(AgentRuntimeConfig.parse(settings), null, 2);
 }
@@ -223,11 +235,15 @@ export function agentSettings(user: User, appBaseUrl = process.env.APP_BASE_URL)
 const hashSettings = (content: string) => createHash('sha256').update(content).digest('hex');
 
 /** True when the agent's settings file is missing or out of date. */
-export function settingsStale(row: AgentRow, user: User): boolean {
-  return row.configHash !== hashSettings(agentSettings(user));
+export function settingsStale(
+  row: AgentRow,
+  user: User,
+  reminders: ReminderSchedule[] = [],
+): boolean {
+  return row.configHash !== hashSettings(agentSettings(user, reminders));
 }
 
-/** Push changeable settings (backend URL, brief time, timezone) to the agent's disk. Wakes it. */
+/** Push changeable settings (backend URL, brief time, timezone, reminders) to the agent's disk. Wakes it. */
 export async function writeAgentSettings(
   db: Db,
   user: User,
@@ -235,13 +251,55 @@ export async function writeAgentSettings(
 ): Promise<void> {
   const row = await getAgentRow(db, user.id);
   if (!row?.maritimeAgentId) return;
-  const content = agentSettings(user);
+  const content = agentSettings(user, await activeSchedules(db, user));
   await maritime.mkdir(
     row.maritimeAgentId,
     AGENT_CONFIG_PATH.slice(0, AGENT_CONFIG_PATH.lastIndexOf('/')),
   );
   await maritime.writeFile(row.maritimeAgentId, AGENT_CONFIG_PATH, content);
   await setAgent(db, row.id, { configWrittenAt: new Date(), configHash: hashSettings(content) });
+}
+
+/**
+ * After a reminder changes: rewrite the agent's settings so its schedules follow. Maritime picks
+ * up the new GET /schedules on its next poll of the (now awake) agent. Never throws; a failed
+ * write is retried by the next status check (settingsStale).
+ */
+export async function syncAgentSettings(
+  db: Db,
+  user: User,
+  maritime: MaritimeClient | null,
+): Promise<boolean> {
+  try {
+    const localDir = localAgentDir();
+    if (localDir) {
+      await rewriteLocalSettings(db, user, localDir);
+      return true;
+    }
+    if (!maritime) return false;
+    await writeAgentSettings(db, user, maritime);
+    return true;
+  } catch (err) {
+    console.warn('[settings] sync failed; will retry on next status check', String(err));
+    return false;
+  }
+}
+
+/** Local development: update the settings file in place, keeping the agent's identity. */
+async function rewriteLocalSettings(db: Db, user: User, dataDir: string) {
+  const fs = await import('node:fs/promises');
+  const path = await import('node:path');
+  const file = path.join(dataDir, 'helm', 'config.json');
+  const current = JSON.parse(await fs.readFile(file, 'utf8')) as Record<string, unknown>;
+  const content = agentSettings(user, await activeSchedules(db, user));
+  const { reminders: _old, ...rest } = current;
+  await fs.writeFile(
+    file,
+    JSON.stringify(AgentRuntimeConfig.parse({ ...rest, ...JSON.parse(content) }), null, 2),
+  );
+  const row = await getAgentRow(db, user.id);
+  if (row)
+    await setAgent(db, row.id, { configWrittenAt: new Date(), configHash: hashSettings(content) });
 }
 
 /** Delete a student everywhere: their Maritime end user (agents, tokens) and all Helm data. */
@@ -349,8 +407,9 @@ export async function ensureLocalAgent(db: Db, user: User, dataDir: string): Pro
   const path = await import('node:path');
   const file = path.join(dataDir, 'helm', 'config.json');
   await fs.mkdir(path.dirname(file), { recursive: true });
+  const content = agentSettings(user, await activeSchedules(db, user));
   const settings = {
-    ...(JSON.parse(agentSettings(user)) as object),
+    ...(JSON.parse(content) as object),
     studentId: user.id,
     agentToken: token,
   };
@@ -358,7 +417,7 @@ export async function ensureLocalAgent(db: Db, user: User, dataDir: string): Pro
   const row = (await getAgentRow(db, user.id))!;
   await setAgent(db, row.id, {
     configWrittenAt: new Date(),
-    configHash: hashSettings(agentSettings(user)),
+    configHash: hashSettings(content),
   });
   return (await getAgentRow(db, user.id))!;
 }

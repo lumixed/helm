@@ -99,3 +99,74 @@ describe('chat over /chat (free text)', () => {
     expect(JSON.stringify(events)).not.toContain("What's due this week"); // no chat text on the timeline
   });
 });
+
+describe('quick capture in chat', () => {
+  it('sets a reminder the person asks for, through the backend, and confirms it', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'helm-chat-remind-'));
+    process.env.HELM_DATA_DIR = dir;
+    process.env.HELM_STUDENT_ID = 's1';
+    vi.resetModules();
+    const { createApp } = await import('../server');
+    const { Emitter } = await import('../emit');
+    const { Dedupe } = await import('../dedupe');
+    const posted: { path: string; body: Record<string, unknown> }[] = [];
+    const events: { type: string; reason: string }[] = [];
+    const app = createApp({
+      emitter: new Emitter({
+        target: () => ({ backendUrl: 'https://helm.test', token: 't', studentId: 's1' }),
+        outbox: path.join(dir, 'o.jsonl'),
+        fetch: (async (_u: string | URL | Request, init?: RequestInit) => {
+          events.push(...(JSON.parse(String(init?.body)) as { events: typeof events }).events);
+          return new Response('{"accepted":1,"duplicates":0}');
+        }) as typeof fetch,
+      }),
+      dedupe: new Dedupe(path.join(dir, 'p.json')),
+      handlerDeps: {
+        dataDir: dir,
+        get: async () => new Response(JSON.stringify(state)),
+        post: async (p, body) => {
+          posted.push({ path: p, body: body as Record<string, unknown> });
+          return new Response(JSON.stringify({ description: 'Every month on the 1st at 9 am' }), {
+            status: 201,
+          });
+        },
+        chat: async (text) =>
+          text.includes('rent')
+            ? {
+                reply: 'Rent on the 1st.',
+                intent: 'remind' as const,
+                reminder: { title: 'Pay rent', repeat: 'monthly' as const, day: 1, time: '09:00' },
+                model: 'test',
+              }
+            : {
+                reply: 'Sure.',
+                intent: 'remind' as const,
+                reminder: { title: 'Call mom', repeat: 'weekly' as const, time: '25:00' },
+                model: 'test',
+              },
+      },
+    });
+    const say = async (message: string) =>
+      (
+        (await (
+          await app.request('/chat', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ message, source: 'front_door', conversation_id: 'app' }),
+          })
+        ).json()) as { response: string }
+      ).response;
+
+    expect(await say('remind me to pay rent on the 1st')).toBe(
+      "Done: “Pay rent”, every month on the 1st at 9 am. It runs on your agent's own schedule, so it arrives even when Helm is closed.",
+    );
+    expect(posted[0]).toMatchObject({
+      path: '/api/agent/reminders',
+      body: { title: 'Pay rent', rule: { repeat: 'monthly', day: 1, time: '09:00' } },
+    });
+    // An impossible time (and no weekday) is never sent; the person is asked again.
+    expect(await say('call mom sometime')).toContain("couldn't tell when");
+    expect(posted).toHaveLength(1);
+    expect(events.map((e) => e.reason)).toContain('Set a reminder you asked for in chat');
+  });
+});

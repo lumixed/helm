@@ -265,12 +265,27 @@ export async function buildScorecard(
     ],
   });
 
-  // 4. Cron and webhook triggers.
+  // 4. Cron and webhook triggers. Each reminder is its own cron (GET /schedules → byo:reminder-<id>).
   const crons = triggers.ok ? triggers.v.filter((t) => t.type === 'cron' && t.enabled) : [];
+  const reminderTitles = new Map(
+    (
+      await db
+        .select({ id: schema.reminders.id, title: schema.reminders.title })
+        .from(schema.reminders)
+        .where(eq(schema.reminders.userId, user.id))
+    ).map((r) => [r.id, r.title]),
+  );
+  const cronLabel = (label?: string) => {
+    const m = /reminder-([0-9a-f-]{36})/.exec(label ?? '');
+    if (!m) return label ?? 'cron';
+    return `Reminder: ${reminderTitles.get(m[1]!) ?? 'removed'}`;
+  };
+  const reminderFires = events.filter((e) => e.type === 'reminder.fired');
+  const byCron = reminderFires.filter((e) => e.payload.firedBy === 'maritime_cron');
   rows.push({
     id: 'triggers',
     feature: 'Cron and webhook triggers',
-    how: 'The morning brief and a safety-net check run on platform cron; emails, documents and hand-ins arrive by webhook.',
+    how: 'The morning brief, every reminder (one cron each, in the person’s timezone) and a safety-net check run on platform cron; emails, documents and hand-ins arrive by webhook.',
     status:
       crons.length > 0 && hookWakes.length > 0
         ? 'active'
@@ -282,7 +297,7 @@ export async function buildScorecard(
     evidence: [
       ...(triggers.ok
         ? crons.map((t) => ({
-            label: t.config?.label ?? 'cron',
+            label: cronLabel(t.config?.label),
             value: `${t.config?.schedule ?? '?'} (${t.config?.tz ?? 'UTC'})`,
           }))
         : [{ label: 'Triggers', value: mid ? unavailable(triggers) : 'no agent' }]),
@@ -294,6 +309,14 @@ export async function buildScorecard(
         label: 'Webhook wakes',
         value: hookWakes[0] ? `${hookWakes.length}, last ${when(hookWakes[0].at)}` : 'none yet',
       },
+      ...(reminderFires.length
+        ? [
+            {
+              label: 'Reminders sent',
+              value: `${byCron.length} woken by Maritime cron${byCron[0] ? ` (last ${when(byCron[0].at)}, ${Number(byCron[0].payload.lateS ?? 0)}s after the minute)` : ''}, ${reminderFires.length - byCron.length} by the safety net`,
+            },
+          ]
+        : []),
     ],
   });
 

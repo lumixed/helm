@@ -6,6 +6,7 @@ import {
   IconAdd,
   IconAlert,
   IconBolt,
+  IconBell,
   IconBox,
   IconCheck,
   IconHandIn,
@@ -44,7 +45,8 @@ function look(
     ? 'bad'
     : type === 'submission.submitted' || type === 'egress.allowed'
       ? 'good'
-      : type.startsWith('maritime:')
+      : type.startsWith('maritime:') ||
+          (type === 'reminder.fired' && payload.firedBy === 'maritime_cron')
         ? 'maritime'
         : 'neutral';
   if (type === 'egress.blocked' || type === 'egress.allowed' || type.includes('network_test'))
@@ -58,6 +60,7 @@ function look(
   if (type === 'submission.submitted') return { Icon: IconCheck, tone };
   if (type.startsWith('submission') || type === 'alert.sent') return { Icon: IconHandIn, tone };
   if (type.startsWith('sandbox')) return { Icon: IconBox, tone };
+  if (type.startsWith('reminder')) return { Icon: IconBell, tone };
   return { Icon: IconBolt, tone };
 }
 

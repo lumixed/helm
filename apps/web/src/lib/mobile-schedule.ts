@@ -1,8 +1,11 @@
-import { localToUtc, utcToLocal } from '@helm/shared';
+import { localToUtc, nextOccurrence, utcToLocal } from '@helm/shared';
+import { eq } from 'drizzle-orm';
+import { schema } from '@/db';
 import type { Db } from '@/db';
 import type { User } from '@/db/schema';
 import { listAssignments } from './assignments';
 import { formatWhen } from './format';
+import { listReminders } from './reminders';
 import { listSubmissions, timings } from './submissions';
 
 /**
@@ -73,6 +76,32 @@ export async function mobileSchedule(
       body: `${a.courseCode ? `${a.courseCode} · ` : ''}${a.title}, ${formatWhen(a.dueAt, user.timezone)}`,
       path: '/today',
     });
+  }
+
+  // Reminders. A phone with server push gets them from the agent's Maritime cron already, so
+  // only phones without it (Expo Go) schedule them locally. Up to 3 occurrences each.
+  const pushPhones = await db
+    .select({ id: schema.pushTokens.id })
+    .from(schema.pushTokens)
+    .where(eq(schema.pushTokens.userId, user.id))
+    .limit(1);
+  if (pushPhones.length === 0) {
+    for (const r of await listReminders(db, user.id)) {
+      if (!r.enabled) continue;
+      let after = now;
+      for (let i = 0; i < 3; i++) {
+        const at = nextOccurrence(r.ruleJson, user.timezone, after);
+        if (!at || at.getTime() > now.getTime() + 14 * DAY) break;
+        out.push({
+          id: `reminder:${r.id}:${at.toISOString()}`,
+          at: at.toISOString(),
+          title: '⏰ Reminder',
+          body: r.title,
+          path: '/reminders',
+        });
+        after = at;
+      }
+    }
   }
 
   return out.sort((x, y) => x.at.localeCompare(y.at)).slice(0, MAX);

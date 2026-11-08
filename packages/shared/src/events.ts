@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { ExtractedAssignment as ExtractedAssignmentRef } from './domain';
+import { ReminderRule as ReminderRuleRef } from './reminders';
 
 /**
  * Everything the agent reports back to the backend. These become the Agent timeline (M8).
@@ -35,6 +36,8 @@ export const AGENT_EVENT_TYPES = [
   'sandbox.created',
   'sandbox.command',
   'sandbox.ended',
+  'reminder.set',
+  'reminder.fired',
 ] as const;
 
 export const AgentEventType = z.enum(AGENT_EVENT_TYPES);
@@ -77,4 +80,22 @@ export const IntakeResultRequest = z.object({
   assignments: z.array(z.lazy(() => ExtractedAssignmentRef)).max(200),
   warnings: z.array(z.string().max(500)).max(50),
 });
+/** Agent -> backend: the person asked for a reminder in chat. */
+export const ReminderCreateRequest = z.object({
+  studentId: z.string().min(1).max(128),
+  requestId: z.string().min(1).max(200),
+  title: z.string().min(1).max(120),
+  rule: ReminderRuleRef,
+});
+export type ReminderCreateRequest = z.infer<typeof ReminderCreateRequest>;
+
+/** Agent -> backend: a reminder's Maritime cron woke the agent; tell the person. */
+export const ReminderFiredRequest = z.object({
+  studentId: z.string().min(1).max(128),
+  requestId: z.string().min(1).max(200),
+  reminderId: z.string().min(1).max(64),
+  occurrenceAt: z.iso.datetime({ offset: true }),
+});
+export type ReminderFiredRequest = z.infer<typeof ReminderFiredRequest>;
+
 export type IntakeResultRequest = z.infer<typeof IntakeResultRequest>;

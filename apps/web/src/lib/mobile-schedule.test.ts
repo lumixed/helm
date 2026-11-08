@@ -3,6 +3,8 @@ import { connect, schema } from '@/db';
 import type { User } from '@/db/schema';
 import { confirmAssignments, listAssignments, saveIntakeResult } from './assignments';
 import { mobileSchedule } from './mobile-schedule';
+import { registerPushToken } from './push';
+import { createReminder } from './reminders';
 
 describe('mobileSchedule', () => {
   it('lists the next briefs in the person’s timezone and day-before reminders, never in the past', async () => {
@@ -50,6 +52,27 @@ describe('mobileSchedule', () => {
     expect(due).toHaveLength(1); // "Far" is beyond a week
     expect(due[0]).toMatchObject({ at: '2026-11-10T07:59:00.000Z', title: 'Due tomorrow' });
     expect(list.every((n) => Date.parse(n.at) > now.getTime())).toBe(true);
+
+    await createReminder(
+      db,
+      user,
+      { title: 'Vitamins', rule: { repeat: 'daily', time: '08:00' } },
+      'you',
+      now,
+    );
+    const withReminder = await mobileSchedule(db, user, now);
+    const rem = withReminder.filter((n) => n.id.startsWith('reminder:'));
+    expect(rem.map((n) => n.at)).toEqual([
+      '2026-11-10T16:00:00.000Z',
+      '2026-11-11T16:00:00.000Z',
+      '2026-11-12T16:00:00.000Z',
+    ]);
+    expect(rem[0]).toMatchObject({ body: 'Vitamins', path: '/reminders' });
+    // A phone with server push gets reminders from the agent's cron instead: no duplicates.
+    await registerPushToken(db, user.id, 'ExponentPushToken[dev1]', 'ios');
+    expect(
+      (await mobileSchedule(db, user, now)).filter((n) => n.id.startsWith('reminder:')),
+    ).toHaveLength(0);
     expect(list.map((n) => n.at)).toEqual([...list.map((n) => n.at)].sort());
   });
 });

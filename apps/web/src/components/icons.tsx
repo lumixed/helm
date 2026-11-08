@@ -118,3 +118,9 @@ export const IconAsk = (p: SVGProps<SVGSVGElement>) => (
     <path d="M9 11h6M9 14h4" />
   </Icon>
 );
+export const IconBell = (p: SVGProps<SVGSVGElement>) => (
+  <Icon {...p}>
+    <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" />
+    <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" />
+  </Icon>
+);

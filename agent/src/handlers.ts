@@ -14,6 +14,8 @@ import {
   type SubmissionResultRequest,
   type InboxResultRequest,
   type IntakeResultRequest,
+  previousOccurrence,
+  type ReminderFiredRequest,
 } from '@helm/shared';
 import { z } from 'zod';
 import { DATA_DIR, runtime } from './config';
@@ -29,7 +31,7 @@ import {
 } from './tools/classify-email';
 import { DocumentError, readDocumentText, resolveInside } from './tools/read-document';
 import { SandboxUnavailable, parseInSandbox } from './tools/sandbox-parse';
-import { ChatMemory, chatReply, type ChatReply, type ChatTurn } from './tools/chat';
+import { ChatMemory, chatReply, toReminderRule, type ChatReply, type ChatTurn } from './tools/chat';
 
 export interface DocumentRead {
   text: string;
@@ -163,11 +165,17 @@ const defaultDeps = (): HandlerDeps => ({
     return { summary: r.data.summary, writer: r.model };
   },
   chat: (text, state, history, now) =>
-    chatReply(text, state, history, now, (req) =>
-      llmJson(
-        llmChainFromEnv().map((o) => ({ ...o, timeoutMs: 15_000 })),
-        req,
-      ),
+    chatReply(
+      text,
+      state,
+      history,
+      now,
+      (req) =>
+        llmJson(
+          llmChainFromEnv().map((o) => ({ ...o, timeoutMs: 15_000 })),
+          req,
+        ),
+      runtime().reminders,
     ),
   fetchFeed: async (url) => {
     const res = await fetch(url, { signal: AbortSignal.timeout(15_000), redirect: 'follow' });
@@ -200,6 +208,7 @@ const WAKE_REASONS: Record<AgentMessage['type'], string> = {
   'redteam.egress': 'Woke for a red-team simulation',
   'gmail.sync': 'Woke to check your Gmail',
   'calendar.sync': 'Woke to sync your Canvas calendar',
+  'reminder.due': 'Woke for your reminder',
 };
 
 /**
@@ -260,6 +269,10 @@ export async function handleMessage(msg: AgentMessage, ctx: HandlerContext): Pro
         woke,
         ctx,
       );
+      break;
+    }
+    case 'reminder.due': {
+      reply = await handleReminderDue(msg.payload.reminderId, requestId, woke, ctx);
       break;
     }
     case 'gmail.sync': {
@@ -1033,12 +1046,21 @@ export async function handleChat(
   } catch {
     return "Sorry, I couldn't think that through just now. Try again in a moment.";
   }
+  const requestId = `chat:${Date.now()}`;
+  let reason =
+    r.intent === 'brief'
+      ? 'Answered you in chat and started a fresh brief'
+      : 'Answered a question in chat';
+  if (r.intent === 'remind') {
+    const set = await setReminderFromChat(r, state.studentId, requestId, deps);
+    r = { ...r, reply: set.reply };
+    reason = set.ok ? 'Set a reminder you asked for in chat' : 'Could not set a reminder from chat';
+  }
   const at = deps.now().toISOString();
   await memory.append(conversationId, [
     { role: 'user', text: text.slice(0, 2000), at },
     { role: 'assistant', text: r.reply, at },
   ]);
-  const requestId = `chat:${Date.now()}`;
   const woke = ctx.emitter.event({
     eventId: `${requestId}:woke`,
     requestId,
@@ -1052,10 +1074,7 @@ export async function handleChat(
       eventId: `${requestId}:replied`,
       requestId,
       type: 'chat.replied',
-      reason:
-        r.intent === 'brief'
-          ? 'Answered you in chat and started a fresh brief'
-          : 'Answered a question in chat',
+      reason,
       payload: { intent: r.intent, model: r.model, ms: Date.now() - started },
     }),
   );
@@ -1073,6 +1092,51 @@ export async function handleChat(
       ctx,
     ).catch((err: unknown) => console.error('[chat] brief failed', err));
   return r.reply;
+}
+
+/**
+ * Quick capture: "remind me to pay rent on the 1st". The backend stores it and rewrites this
+ * agent's settings file, so the reminder becomes its own Maritime cron on the next schedule sync.
+ */
+async function setReminderFromChat(
+  r: ChatReply,
+  studentId: string,
+  requestId: string,
+  deps: HandlerDeps,
+): Promise<{ ok: boolean; reply: string }> {
+  const rule = r.reminder ? toReminderRule(r.reminder) : null;
+  if (!r.reminder || !rule)
+    return {
+      ok: false,
+      reply:
+        "I couldn't tell when to remind you. Try something like “remind me to pay rent on the 1st at 9am”.",
+    };
+  try {
+    const res = await deps.post('/api/agent/reminders', {
+      studentId,
+      requestId,
+      title: r.reminder.title,
+      rule,
+    });
+    const body = (await res.json().catch(() => ({}))) as {
+      description?: string;
+      error?: string;
+    };
+    if (!res.ok)
+      return {
+        ok: false,
+        reply: `I couldn't set that reminder: ${body.error ?? 'try again in a moment.'}`,
+      };
+    return {
+      ok: true,
+      reply: `Done: “${r.reminder.title}”, ${(body.description ?? '').replace(/^Every/, 'every')}. It runs on your agent's own schedule, so it arrives even when Helm is closed.`,
+    };
+  } catch {
+    return {
+      ok: false,
+      reply: "I couldn't reach Helm to save that reminder. Try again in a moment.",
+    };
+  }
 }
 
 /**
@@ -1160,4 +1224,75 @@ async function handleCalendarSync(
       { source: 'canvas', count: items.length, total, ...r },
     );
   return `calendar: ${r.added} new, ${r.moved} moved`;
+}
+
+/** Late deliveries still count; past this the platform missed the slot and the heartbeat covers it. */
+const REMINDER_WINDOW_MS = 30 * 60_000;
+
+/**
+ * A reminder's own Maritime cron woke this agent. The title lives in the settings file on this
+ * agent's disk; the backend only learns which reminder fired and sends it to the person's phone.
+ */
+export async function handleReminderDue(
+  reminderId: string,
+  requestId: string,
+  woke: ReturnType<Emitter['event']>,
+  ctx: HandlerContext,
+): Promise<string> {
+  const deps = { ...defaultDeps(), ...ctx.deps };
+  const rt = runtime();
+  const reminder = rt.reminders.find((r) => r.id === reminderId);
+  // Deleted since Maritime last synced the schedule: nothing to say, nothing on the timeline.
+  if (!reminder) return 'reminder: no longer set';
+  const now = deps.now();
+  // Allow a little clock skew, then find the occurrence this wake is for. Cron "28-31" (day 31 in
+  // short months) and a one-off's yearly cron wake on days that are not occurrences: stay quiet.
+  const occurrence = previousOccurrence(
+    reminder.rule,
+    rt.timezone,
+    new Date(now.getTime() + 120_000),
+  );
+  if (!occurrence || now.getTime() - occurrence.getTime() > REMINDER_WINDOW_MS)
+    return 'reminder: not due today';
+
+  const body: ReminderFiredRequest = {
+    studentId: rt.studentId,
+    requestId,
+    reminderId,
+    occurrenceAt: occurrence.toISOString(),
+  };
+  let delivered: boolean;
+  let duplicate: boolean;
+  try {
+    const res = await deps.post('/api/agent/reminders/fired', body);
+    if (res.status === 404) return 'reminder: backend no longer has it';
+    if (res.status === 409) return 'reminder: backend says it is not due now';
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const r = (await res.json()) as { delivered?: boolean; duplicate?: boolean };
+    delivered = Boolean(r.delivered);
+    duplicate = Boolean(r.duplicate);
+  } catch (err) {
+    // The heartbeat catch-up sends it a few minutes later and records it then.
+    console.error('[reminder] could not reach backend', err);
+    return 'reminder: backend unreachable; the heartbeat will send it';
+  }
+  if (duplicate) return 'reminder: already sent for this time';
+  await ctx.emitter.emit(
+    woke,
+    ctx.emitter.event({
+      eventId: `${requestId}:fired`,
+      requestId,
+      type: 'reminder.fired',
+      reason: `Reminded you: ${reminder.title}`,
+      payload: {
+        reminderId,
+        occurrenceAt: occurrence.toISOString(),
+        firedBy: 'maritime_cron',
+        source: ctx.source,
+        delivered,
+        lateS: Math.round((now.getTime() - occurrence.getTime()) / 1000),
+      },
+    }),
+  );
+  return `reminder: ${delivered ? 'sent to your phone' : 'on the timeline (no phone linked)'}`;
 }

@@ -12,7 +12,12 @@ import {
   uniqueIndex,
   uuid,
 } from 'drizzle-orm/pg-core';
-import { AGENT_EVENT_TYPES, ASSIGNMENT_STATUSES, ASSIGNMENT_TYPES } from '@helm/shared';
+import {
+  AGENT_EVENT_TYPES,
+  ASSIGNMENT_STATUSES,
+  ASSIGNMENT_TYPES,
+  type ReminderRule,
+} from '@helm/shared';
 
 /** PRD section 9. All times are stored in UTC; the student's timezone is applied at display. */
 
@@ -469,3 +474,29 @@ export const sandboxRuns = pgTable(
   ],
 );
 export type SandboxRun = typeof sandboxRuns.$inferSelect;
+
+/**
+ * Personal reminders ("pay rent on the 1st"). Each enabled one is written into the agent's
+ * settings file and published by the agent as its own Maritime cron schedule.
+ */
+export const reminders = pgTable(
+  'reminders',
+  {
+    id: id(),
+    userId: userRef(),
+    title: text('title').notNull(),
+    /** ReminderRule from @helm/shared. */
+    ruleJson: jsonb('rule_json').$type<ReminderRule>().notNull(),
+    /** you (the Reminders page) | chat (asked in Ask) */
+    createdVia: text('created_via').notNull().default('you'),
+    enabled: boolean('enabled').notNull().default(true),
+    /** The occurrence last sent; makes the cron and the heartbeat catch-up idempotent. */
+    lastOccurrenceAt: timestamp('last_occurrence_at', { withTimezone: true }),
+    /** maritime_cron | heartbeat */
+    lastFiredBy: text('last_fired_by'),
+    lastFiredAt: timestamp('last_fired_at', { withTimezone: true }),
+    createdAt: createdAt(),
+  },
+  (t) => [index('reminders_user_idx').on(t.userId)],
+);
+export type Reminder = typeof reminders.$inferSelect;

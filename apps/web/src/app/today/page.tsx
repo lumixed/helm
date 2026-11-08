@@ -4,7 +4,7 @@ import { formatDuration, rankAssignments } from '@helm/shared';
 import { AgentStatus } from '@/components/AgentStatus';
 import { BriefCard } from '@/components/BriefCard';
 import { ChangesCard } from '@/components/ChangesCard';
-import { IconAdd, IconArrow, IconShare } from '@/components/icons';
+import { IconAdd, IconArrow, IconBell, IconShare } from '@/components/icons';
 import { SubmissionAlerts } from '@/components/SubmissionsBoard';
 import { Banner, Card, CardTitle, Chip, Shell } from '@/components/ui';
 import { getDb } from '@/db';
@@ -16,6 +16,7 @@ import { requireProfile } from '@/lib/page-data';
 import { currentUser } from '@/lib/session';
 import { listSubmissions } from '@/lib/submissions';
 import { llmPausedThisMonth } from '@/lib/limits';
+import { reminderViews } from '@/lib/reminders';
 
 export const dynamic = 'force-dynamic';
 
@@ -34,13 +35,14 @@ export default async function TodayPage({
   if (!user.onboarded) redirect('/setup');
   const db = await getDb();
   const fullUser = (await currentUser())!;
-  const [confirmed, pending, brief, changes, submissions, paused] = await Promise.all([
+  const [confirmed, pending, brief, changes, submissions, paused, reminders] = await Promise.all([
     listAssignments(db, user.id, user.timezone, { review: false }),
     listAssignments(db, user.id, user.timezone, { review: true }),
     todaysBrief(db, fullUser),
     listChanges(db, fullUser),
     listSubmissions(db, fullUser),
     llmPausedThisMonth(db, user.id),
+    reminderViews(db, fullUser),
   ]);
   const pickable = confirmed
     .filter((a) => a.status === 'todo' || a.status === 'in_progress')
@@ -54,6 +56,7 @@ export default async function TodayPage({
     ...(brief?.focus.map((f) => f.assignmentId) ?? []),
     ...live.map((r) => r.item.id),
   ]);
+  const nextReminders = reminders.filter((r) => r.enabled && r.nextAt).slice(0, 3);
   const comingUp = ranked.filter((r) => !shown.has(r.item.id) && r.hoursLeft <= 7 * 24).slice(0, 8);
   const dateLabel = new Intl.DateTimeFormat('en-CA', {
     timeZone: user.timezone,
@@ -161,7 +164,46 @@ export default async function TodayPage({
         </Card>
       )}
 
+      {nextReminders.length > 0 ? (
+        <Card>
+          <CardTitle
+            aside={
+              <Link
+                href="/reminders"
+                className="font-medium text-ink underline-offset-4 hover:underline"
+              >
+                All reminders
+              </Link>
+            }
+          >
+            Reminders
+          </CardTitle>
+          <ul className="flex flex-col divide-y divide-line">
+            {nextReminders.map((r) => (
+              <li
+                key={r.id}
+                className="flex items-center justify-between gap-3 py-2.5 first:pt-0 last:pb-0"
+              >
+                <span className="flex min-w-0 items-center gap-2 truncate text-ink">
+                  <IconBell width={16} height={16} className="shrink-0 text-muted" />
+                  {r.title}
+                </span>
+                <Chip>{formatWhen(r.nextAt!, user.timezone)}</Chip>
+              </li>
+            ))}
+          </ul>
+        </Card>
+      ) : null}
+
       <div className="grid gap-3 sm:grid-cols-2">
+        {nextReminders.length === 0 && (
+          <QuickLink
+            href="/reminders"
+            Icon={IconBell}
+            title="Set a reminder"
+            body="Rent, bills, appointments. Your agent's own schedule sends them, even with Helm closed."
+          />
+        )}
         <QuickLink
           href="/share"
           Icon={IconShare}
