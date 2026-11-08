@@ -29,7 +29,9 @@ export async function agentState(db: Db, user: User): Promise<AgentState> {
         eq(schema.assignments.userId, user.id),
         eq(schema.assignmentChanges.applied, true),
         // A change the student confirmed later counts from when it was applied.
-        sql`coalesce(${schema.assignmentChanges.decidedAt}, ${schema.assignmentChanges.createdAt}) > ${since}`,
+        // Pass the time as an ISO string: postgres.js (production) rejects a raw Date inside sql``,
+        // while PGlite (tests) accepts it, so this only failed on Neon.
+        sql`coalesce(${schema.assignmentChanges.decidedAt}, ${schema.assignmentChanges.createdAt}) > ${since.toISOString()}::timestamptz`,
       ),
     )
     .orderBy(desc(schema.assignmentChanges.createdAt))
