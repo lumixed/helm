@@ -18,13 +18,14 @@ export const ChangeKind = z.enum(CHANGE_KINDS);
 export type ChangeKind = z.infer<typeof ChangeKind>;
 
 /** Where a message came from. Only email is read by Helm itself; the rest are shared by the person. */
-export const MESSAGE_SOURCES = ['email', 'whatsapp', 'instagram', 'sms', 'other'] as const;
+export const MESSAGE_SOURCES = ['email', 'whatsapp', 'instagram', 'slack', 'sms', 'other'] as const;
 export const MessageSource = z.enum(MESSAGE_SOURCES);
 export type MessageSource = z.infer<typeof MessageSource>;
 export const SOURCE_LABEL: Record<MessageSource, string> = {
   email: 'email',
   whatsapp: 'WhatsApp message',
   instagram: 'Instagram message',
+  slack: 'Slack message',
   sms: 'text message',
   other: 'message',
 };

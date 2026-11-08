@@ -15,8 +15,8 @@ const MAX_CHARS = 20_000;
 const UNVERIFIED_MATCH_CAP = 0.6;
 
 export interface InboundEmail {
-  /** email (read by Helm) or a message the person shared: whatsapp, instagram, sms, other. */
-  source?: 'email' | 'whatsapp' | 'instagram' | 'sms' | 'other';
+  /** email (read by Helm), a message read on the private desktop, or one the person shared. */
+  source?: 'email' | 'whatsapp' | 'instagram' | 'slack' | 'sms' | 'other';
   from: string;
   subject: string;
   receivedAt: string;

@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { Button, Card, Chip, Field, inputClass, textareaClass } from './ui';
 
-export type Source = 'email' | 'whatsapp' | 'instagram' | 'sms' | 'other';
+export type Source = 'email' | 'whatsapp' | 'instagram' | 'slack' | 'sms' | 'other';
 
 export interface MessageTemplate {
   id: string;
@@ -33,6 +33,7 @@ const DECISION: Record<string, string> = {
 const SOURCES: { value: Source; label: string }[] = [
   { value: 'whatsapp', label: 'WhatsApp' },
   { value: 'instagram', label: 'Instagram' },
+  { value: 'slack', label: 'Slack' },
   { value: 'sms', label: 'Text message' },
   { value: 'email', label: 'Email' },
   { value: 'other', label: 'Other' },

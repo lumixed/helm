@@ -418,7 +418,7 @@ export const desktopApps = pgTable(
   {
     id: id(),
     userId: userRef(),
-    /** whatsapp | instagram */
+    /** whatsapp | instagram | slack */
     app: text('app').notNull(),
     computerId: text('computer_id').notNull(),
     /** linking (waiting for the person's login) | linked | needs_login | disconnected | error */

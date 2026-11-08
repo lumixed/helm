@@ -194,6 +194,32 @@ describe('check', () => {
   });
 });
 
+describe('slack', () => {
+  it('opens Slack on the same private desktop and sends new DMs to the agent as Slack messages', async () => {
+    const r = await connectApp(db, maya, 'slack', deps());
+    expect(r.instructions).toMatch(/click DMs/);
+    expect(log.some((l) => l.includes('type:https://app.slack.com/client'))).toBe(true);
+    const slackRow = async () =>
+      (await db.select().from(schema.desktopApps).where(eq(schema.desktopApps.app, 'slack')))[0]!;
+    screen = chats(['Sam (TA)', 'see you at office hours', 0]);
+    expect((await checkApp(db, await slackRow(), deps(), { force: true })).outcome).toBe('linked');
+    screen = chats(
+      ['Group project', 'Can we move the demo to Thursday 3pm?', 3],
+      ['Sam (TA)', 'see you at office hours', 0],
+    );
+    log = [];
+    expect(await checkApp(db, await slackRow(), deps(), { force: true })).toEqual({
+      outcome: 'checked',
+      newMessages: 1,
+    });
+    expect(sent[0]).toMatchObject({
+      type: 'inbox.message',
+      payload: { source: 'slack', from: 'Group project' },
+    });
+    expect(log).toEqual(['wake', 'zoom', 'sleep']); // no Slack token, no clicks
+  });
+});
+
 describe('disconnect', () => {
   it('deletes the desktop (and its logins) when no app is left', async () => {
     await connectApp(db, maya, 'whatsapp', deps());

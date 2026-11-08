@@ -33,6 +33,16 @@ export const APPS = {
     login: 'Log in to Instagram (and enter any 2FA code), then click Done.',
     beta: true,
   },
+  slack: {
+    label: 'Slack',
+    url: 'https://app.slack.com/client',
+    source: 'slack' as const,
+    // Helm never clicks, so the desktop stays on the DMs view the person leaves it on; Slack
+    // keeps that list (names, last message, unread) live while the desktop sleeps between checks.
+    login:
+      'Sign in to your Slack workspace (email code or password), click DMs in the left bar, then click Done.',
+    beta: true,
+  },
 };
 export type AppId = keyof typeof APPS;
 export const isAppId = (s: string): s is AppId => s in APPS;

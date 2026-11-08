@@ -16,7 +16,7 @@ const STATUS: Record<
 };
 
 /**
- * WhatsApp and Instagram through the person's own private Maritime desktop. They log in
+ * WhatsApp, Instagram and Slack through the person's own private Maritime desktop. They log in
  * themselves (takeover link); Helm only reads the chat list and never opens, types or sends.
  */
 export function MessagingAppsCard({ initial }: { initial: AppView[] }) {
@@ -69,7 +69,8 @@ export function MessagingAppsCard({ initial }: { initial: AppView[] }) {
       <p className="text-sm text-ink-soft">
         Helm reads new messages through your own private browser on Maritime. You log in yourself;
         Helm never sees your password. It only reads the chat list: it never opens a chat, types or
-        sends. Prototype: WhatsApp and Instagram limit automated use, so a test account is safest.
+        sends, and needs no Slack app or API token. Prototype: these apps limit automated use, so a
+        test account is safest.
       </p>
       <ul className="mt-3 flex flex-col gap-4">
         {apps.map((a) => (
