@@ -209,10 +209,24 @@ export async function buildScorecard(
             ? unavailable(remote)
             : (agent?.status ?? 'not provisioned'),
       },
+      {
+        // The agent reports every event to Helm; silence here means it can't reach Helm.
+        label: 'Last report to Helm',
+        value: agent?.lastSeenAt ? when(agent.lastSeenAt) : 'never',
+      },
     ],
   });
 
-  // 2. Persistent /data.
+  // 2. Persistent /data. The memory folder is listed by name and size only, never read.
+  const memory = await probe(async () =>
+    get && mid
+      ? get<{ entries: { name: string; size: number }[] }>(
+          `/api/agents/${mid}/files/list?path=/data/memory`,
+        )
+      : Promise.reject(new Error('no agent')),
+  );
+  const facts = memory.ok ? memory.v.entries.find((e) => e.name === 'facts.json') : undefined;
+  const chats = memory.ok ? memory.v.entries.filter((e) => e.name.startsWith('chat-')).length : 0;
   const newest = files.ok
     ? Math.max(0, ...files.v.entries.map((e) => e.mtime ?? e.modifiedAt ?? 0))
     : 0;
@@ -225,6 +239,17 @@ export async function buildScorecard(
       ? [
           { label: 'Items in /data', value: String(files.v.entries.length) },
           { label: 'Last write', value: newest ? when(newest * 1000) : 'unknown' },
+          ...(memory.ok
+            ? [
+                {
+                  label: 'Remembered notes',
+                  value: facts
+                    ? `memory/facts.json, ${facts.size} bytes (contents never leave the agent)`
+                    : 'none yet (say “remember that…” in Ask)',
+                },
+                { label: 'Chat history files', value: String(chats) },
+              ]
+            : []),
         ]
       : [{ label: '/data', value: mid ? unavailable(files) : 'no agent' }],
   });

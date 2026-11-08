@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Card } from './ui';
+import { Banner, Card } from './ui';
 
 export interface AgentInfo {
   status: 'provisioning' | 'ready' | 'asleep' | 'error' | 'deleting';
@@ -40,6 +40,15 @@ export function AgentStatus({ initial }: { initial: AgentInfo | null }) {
     return () => clearInterval(t);
   }, [agent]);
 
+  // The agent reports to Helm at least every 15 minutes (its heartbeat). A long silence means it
+  // can't reach Helm (wrong address, revoked token), so briefs and reminders won't arrive.
+  const [now, setNow] = useState<number | null>(null);
+  useEffect(() => setNow(Date.now()), []);
+  const silentH =
+    now && agent?.lastSeenAt && (agent.status === 'ready' || agent.status === 'asleep')
+      ? (now - Date.parse(agent.lastSeenAt)) / 3_600_000
+      : 0;
+
   const s = agent ? LABEL[agent.status] : null;
   return (
     <Card>
@@ -56,6 +65,16 @@ export function AgentStatus({ initial }: { initial: AgentInfo | null }) {
             <p className="mt-1 text-sm">{s.detail}</p>
             {agent.status === 'error' && agent.lastError && (
               <p className="mt-2 text-sm text-danger">{agent.lastError}</p>
+            )}
+            {silentH >= 2 && (
+              <Banner tone="warn" role="status" className="mt-3">
+                Your agent hasn&apos;t reported back to Helm in{' '}
+                {silentH >= 48
+                  ? `${Math.round(silentH / 24)} days`
+                  : `${Math.round(silentH)} hours`}
+                , so briefs and reminders may not arrive. Try &ldquo;Send my brief now&rdquo; on
+                Today; if nothing comes, its connection to Helm needs fixing.
+              </Banner>
             )}
             {agent.maritimeAgentId && (
               <p className="mt-3 text-xs text-muted">
