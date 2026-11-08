@@ -5,6 +5,9 @@ export const metadata: Metadata = {
   title: 'Helm',
   description:
     'A private assistant for everyone: one agent that reads your email and messages, plans your day, and handles routine hand-ins with your OK.',
+  applicationName: 'Helm',
+  appleWebApp: { capable: true, title: 'Helm', statusBarStyle: 'default' },
+  icons: { icon: '/icons/icon-192.png', apple: '/icons/apple-touch-icon.png' },
 };
 
 export const viewport: Viewport = {

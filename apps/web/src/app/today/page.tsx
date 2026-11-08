@@ -6,6 +6,8 @@ import { AgentStatus } from '@/components/AgentStatus';
 import { BriefCard } from '@/components/BriefCard';
 import { ChangesCard } from '@/components/ChangesCard';
 import { ShareMessage } from '@/components/ShareMessage';
+import { TelegramCard } from '@/components/TelegramCard';
+import { telegramToken } from '@/lib/telegram';
 import { SubmissionAlerts } from '@/components/SubmissionsBoard';
 import { listSubmissions } from '@/lib/submissions';
 import { demoEmailTemplates } from '@/lib/demo-emails';
@@ -140,6 +142,17 @@ export default async function TodayPage() {
         </Link>
       </p>
       <ShareMessage templates={demo ? demoEmailTemplates(confirmed, user.timezone, now) : []} />
+      {telegramToken() && <TelegramCard linked={user.telegramLinked} />}
+      <details className="text-sm">
+        <summary className="min-h-11 cursor-pointer py-2 font-medium">
+          Put Helm on your phone&apos;s home screen
+        </summary>
+        <p>
+          iPhone: open Helm in Safari, tap Share, then <strong>Add to Home Screen</strong>. Android:
+          open the Chrome menu, then <strong>Install app</strong>. On Android you can then share any
+          message to Helm from the share sheet.
+        </p>
+      </details>
       <AgentStatus initial={agent} />
     </Shell>
   );

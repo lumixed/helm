@@ -41,7 +41,8 @@ const SOURCES: { value: Source; label: string }[] = [
 const blank = (initialText = ''): MessageTemplate => ({
   id: 'blank',
   label: 'Blank',
-  source: 'whatsapp',
+  // Shared from the phone's share sheet: we can't tell which app it came from.
+  source: initialText ? 'other' : 'whatsapp',
   from: '',
   subject: '',
   body: initialText,

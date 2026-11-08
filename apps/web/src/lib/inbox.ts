@@ -18,6 +18,7 @@ import { saveIntakeResult } from './assignments';
 import { formatWhen } from './format';
 import { recordSent } from './maritime-webhooks';
 import { onAssignmentDueChanged } from './submissions';
+import { sendToUser } from './telegram';
 
 /** POST /api/inbox/ingest. The body goes to the agent; the backend keeps only a hash of it. */
 export const IngestBody = z.object({
@@ -242,6 +243,21 @@ export async function saveInboxResult(
         },
       ],
       'email',
+    );
+  }
+  if (decision === 'needs_confirmation' || decision === 'review' || decision === 'applied') {
+    const base = process.env.APP_BASE_URL?.replace(/\/+$/, '');
+    await sendToUser(
+      db,
+      userId,
+      decision === 'applied'
+        ? `Updated from ${source}: ${change.summary}`
+        : decision === 'review'
+          ? `New from ${source}: ${change.summary} Check it in Helm before it goes in your plan.`
+          : `${change.summary} ${reason} Open Helm to apply or ignore it.`,
+      base?.startsWith('https://')
+        ? [[{ text: 'Open Helm', url: `${base}/${decision === 'review' ? 'review' : 'today'}` }]]
+        : [],
     );
   }
   return {

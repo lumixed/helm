@@ -19,6 +19,7 @@ import type { Assignment, Submission, User } from '@/db/schema';
 import type { AgentTransport } from './agent-transport';
 import { formatWhen } from './format';
 import { recordSent } from './maritime-webhooks';
+import { sendToUser, type Button } from './telegram';
 
 /** PRD M7 / section 12. Times come from shared rules; demo mode shortens the windows. */
 export const timings = (): SubmissionTimings => submissionTimings(process.env.DEMO_MODE === 'true');
@@ -57,11 +58,30 @@ export async function recordHelmEvent(
     .onConflictDoNothing();
 }
 
-async function notify(db: Db, userId: string, kind: string, payload: Record<string, unknown>) {
-  await db
-    .insert(schema.notifications)
-    .values({ userId, kind, channel: 'in_app', status: 'unread', payloadJson: payload });
+/** In-app record, plus the student's phone (Telegram) when linked. */
+async function notify(
+  db: Db,
+  userId: string,
+  kind: string,
+  payload: Record<string, unknown>,
+  phone?: { text: string; buttons?: Button[][] },
+) {
+  const sent = phone ? await sendToUser(db, userId, phone.text, phone.buttons) : false;
+  await db.insert(schema.notifications).values({
+    userId,
+    kind,
+    channel: sent ? 'telegram' : 'in_app',
+    status: 'unread',
+    payloadJson: payload,
+  });
 }
+
+const appLink = (path: string) =>
+  process.env.APP_BASE_URL ? `${process.env.APP_BASE_URL.replace(/\/+$/, '')}${path}` : null;
+const openButton = (path: string, text = 'Open Helm'): Button[] => {
+  const url = appLink(path);
+  return url && url.startsWith('https://') ? [{ text, url }] : [];
+};
 
 async function mine(db: Db, userId: string, id: string): Promise<Submission> {
   if (!UUID.test(id)) throw new SubmissionError(404, 'Submission not found.');
@@ -429,7 +449,21 @@ export async function tick(db: Db, deps: TickDeps, userId?: string) {
     if (!claimed) continue;
     done.notices++;
     const tz = await tzOf(db, r.s.userId);
-    await notify(db, r.s.userId, 'hold_notice', { submissionId: r.s.id, submitAt: r.s.submitAt });
+    await notify(
+      db,
+      r.s.userId,
+      'hold_notice',
+      { submissionId: r.s.id, submitAt: r.s.submitAt },
+      {
+        text: `Last chance: Helm hands in "${r.s.fileName}" for ${r.title} at ${formatWhen(r.s.submitAt!, tz)}. Hold it, hand it in now, or do nothing and Helm goes ahead.`,
+        buttons: [
+          [
+            { text: 'Hold', data: `hold:${r.s.id}` },
+            { text: 'Hand in now', data: `now:${r.s.id}` },
+          ],
+        ],
+      },
+    );
     await recordHelmEvent(
       db,
       r.s.userId,
@@ -615,7 +649,16 @@ async function escalate(
     .where(and(eq(schema.submissions.id, s.id), inArray(schema.submissions.status, from)))
     .returning();
   if (!row) return false;
-  await notify(db, s.userId, 'submission_failed', { submissionId: s.id, why });
+  await notify(
+    db,
+    s.userId,
+    'submission_failed',
+    { submissionId: s.id, why },
+    {
+      text: `⚠️ NOT handed in: "${s.fileName}" for ${title}. ${why} Hand it in yourself now on the portal.`,
+      buttons: [openButton('/mock-portal', 'Open the portal')].filter((r) => r.length),
+    },
+  );
   await recordHelmEvent(
     db,
     s.userId,
@@ -682,10 +725,15 @@ export async function recordResult(
       .update(schema.assignments)
       .set({ status: 'submitted', progressPct: 100 })
       .where(eq(schema.assignments.id, s.assignmentId));
-    await notify(db, userId, 'submitted', {
-      submissionId: s.id,
-      confirmationId: receipt.confirmationId,
-    });
+    await notify(
+      db,
+      userId,
+      'submitted',
+      { submissionId: s.id, confirmationId: receipt.confirmationId },
+      {
+        text: `✅ Handed in "${s.fileName}" for ${a!.title}. Confirmation ${receipt.confirmationId}.`,
+      },
+    );
     return { status: 'submitted', duplicate: false };
   }
   await failAttempt(db, s, a!.title, a!.dueAt!, r.outcome.error, r.outcome.retryable, now);
@@ -789,7 +837,16 @@ export async function onAssignmentDueChanged(
         .update(schema.submissions)
         .set({ status: s.status === 'scheduled' ? 'held' : 'ready', lastError: d.why })
         .where(eq(schema.submissions.id, s.id));
-      await notify(db, userId, 'deadline_moved_earlier', { submissionId: s.id });
+      await notify(
+        db,
+        userId,
+        'deadline_moved_earlier',
+        { submissionId: s.id },
+        {
+          text: `URGENT: a deadline moved earlier, so Helm paused "${s.fileName}". ${d.why}`,
+          buttons: [[{ text: 'Hand in now', data: `now:${s.id}` }]],
+        },
+      );
       await recordHelmEvent(
         db,
         userId,
