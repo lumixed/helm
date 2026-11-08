@@ -71,8 +71,8 @@ export async function buildScorecard(
   const from = monthStart.toISOString().slice(0, 10);
   const to = new Date(Date.now() + 86_400_000).toISOString().slice(0, 10);
 
-  const [remote, triggers, env, files, network, activity, policy, usage, hooks] = await Promise.all(
-    [
+  const [remote, triggers, env, files, network, activity, policy, usage, hooks, logs] =
+    await Promise.all([
       probe(async () =>
         get && mid
           ? get<{ status: string; imageName?: string }>(`/api/agents/${mid}`)
@@ -94,9 +94,10 @@ export async function buildScorecard(
       ),
       probe(async () =>
         get && mid
-          ? get<{ root: string; entries: { name: string; size: number; modifiedAt?: number }[] }>(
-              `/api/agents/${mid}/files/list?path=/data`,
-            )
+          ? get<{
+              root: string;
+              entries: { name: string; size: number; mtime?: number; modifiedAt?: number }[];
+            }>(`/api/agents/${mid}/files/list?path=/data`)
           : Promise.reject(new Error('no agent')),
       ),
       probe(async () =>
@@ -136,8 +137,14 @@ export async function buildScorecard(
           ? list<{ url: string; isActive?: boolean }>(await get('/api/v1/webhooks'))
           : Promise.reject(new Error('no key')),
       ),
-    ],
-  );
+      probe(async () =>
+        get && mid
+          ? list<{ timestamp: string; message: string }>(
+              await get(`/api/agents/${mid}/logs?limit=100`),
+            )
+          : Promise.reject(new Error('no agent')),
+      ),
+    ]);
 
   const events = await db
     .select({
@@ -206,7 +213,9 @@ export async function buildScorecard(
   });
 
   // 2. Persistent /data.
-  const newest = files.ok ? Math.max(0, ...files.v.entries.map((e) => e.modifiedAt ?? 0)) : 0;
+  const newest = files.ok
+    ? Math.max(0, ...files.v.entries.map((e) => e.mtime ?? e.modifiedAt ?? 0))
+    : 0;
   rows.push({
     id: 'data',
     feature: 'Persistent /data disk',
@@ -226,6 +235,11 @@ export async function buildScorecard(
       ? `${(lastWake.payload.latencyMs / 1000).toFixed(1)}s`
       : null;
   const sleeps = lifecycle.filter((l) => l.kind === 'agent.sleeping').length;
+  const WOKEN = /Agent woken \(snapshot, (\d+)ms, reason=(\w+)/;
+  const platformWakes = logs.ok
+    ? logs.v.map((l) => ({ at: l.timestamp, m: WOKEN.exec(l.message) })).filter((w) => w.m)
+    : [];
+  const scheduledWakes = platformWakes.filter((w) => w.m![2] === 'autonomous').length;
   rows.push({
     id: 'sleep-wake',
     feature: 'Sleep and wake',
@@ -237,6 +251,15 @@ export async function buildScorecard(
         value: lastWake ? `${when(lastWake.at)} · ${lastWake.reason}` : 'none yet',
       },
       ...(latency ? [{ label: 'Wake latency', value: `${latency} after the trigger` }] : []),
+      ...(platformWakes[0]
+        ? [
+            {
+              label: 'Last wake per Maritime',
+              value: `${when(platformWakes[0].at)} · restored from snapshot in ${(Number(platformWakes[0].m![1]) / 1000).toFixed(1)}s (${platformWakes[0].m![2]})`,
+            },
+            { label: 'Scheduled wakes in recent log', value: String(scheduledWakes) },
+          ]
+        : []),
       { label: 'Wakes recorded', value: String(wakes.length) },
       { label: 'Sleeps reported by Maritime', value: String(sleeps) },
     ],
