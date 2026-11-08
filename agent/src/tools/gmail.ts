@@ -141,3 +141,36 @@ export class GmailState {
     );
   }
 }
+
+/** RFC 2822 message, base64url: what the Gmail API takes for a draft. */
+export function rawMessage(d: { to?: string | null; subject: string; body: string }): string {
+  const headers = [
+    ...(d.to ? [`To: ${d.to.replace(/[\r\n]/g, '')}`] : []),
+    `Subject: =?UTF-8?B?${Buffer.from(d.subject.replace(/[\r\n]/g, ' ')).toString('base64')}?=`,
+    'MIME-Version: 1.0',
+    'Content-Type: text/plain; charset="UTF-8"',
+    'Content-Transfer-Encoding: base64',
+  ];
+  const msg = `${headers.join('\r\n')}\r\n\r\n${Buffer.from(d.body).toString('base64')}`;
+  return Buffer.from(msg).toString('base64url');
+}
+
+/**
+ * Save a draft in the person's Gmail (users.drafts.create). This is the ONLY write Helm makes to
+ * Gmail; it never calls send. Needs the gmail.compose permission.
+ */
+export async function createDraft(
+  token: string,
+  d: { to?: string | null; subject: string; body: string },
+  f: Fetch = fetch,
+): Promise<{ id: string }> {
+  const res = await f(`${GMAIL}/drafts`, {
+    method: 'POST',
+    headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+    body: JSON.stringify({ message: { raw: rawMessage(d) } }),
+    signal: AbortSignal.timeout(15_000),
+  });
+  if (res.status === 403) throw new GmailError('auth');
+  if (!res.ok) throw new GmailError('api');
+  return { id: ((await res.json()) as { id: string }).id };
+}

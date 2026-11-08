@@ -169,6 +169,8 @@ type Update = {
 export interface UpdateActions {
   hold: (userId: string, submissionId: string) => Promise<void>;
   submitNow: (userId: string, submissionId: string) => Promise<void>;
+  /** Two-way chat: pass the person's message to their own agent and return its answer. */
+  chat?: (userId: string, text: string) => Promise<string>;
 }
 
 /** Handle one webhook update: link/unlink a chat, or a Hold / Submit now button. */
@@ -214,11 +216,29 @@ export async function handleUpdate(db: Db, u: Update, actions: UpdateActions): P
       });
       return 'unlinked';
     }
-    await tg('sendMessage', {
-      chat_id: chat,
-      text: 'Hi! I only send notices from Helm. Open the app to see your day.',
-    });
-    return 'ignored';
+    // Anything else from a linked chat is a message to the person's own agent.
+    const [linked] = await db
+      .select({ id: schema.users.id })
+      .from(schema.users)
+      .where(eq(schema.users.telegramChatId, chat));
+    if (!linked || !actions.chat) {
+      await tg('sendMessage', {
+        chat_id: chat,
+        text: linked
+          ? 'Hi! Open the Helm app to see your day.'
+          : 'Hi! Connect this chat from Helm (Settings → Telegram) to talk to your assistant here.',
+      });
+      return 'ignored';
+    }
+    await tg('sendChatAction', { chat_id: chat, action: 'typing' }).catch(() => {});
+    let answer: string;
+    try {
+      answer = await actions.chat(linked.id, u.message.text.slice(0, 2000));
+    } catch {
+      answer = "I couldn't reach your agent just now. Try again in a moment.";
+    }
+    await tg('sendMessage', { chat_id: chat, text: answer.slice(0, 4000) });
+    return 'chat';
   }
 
   const cb = u.callback_query;

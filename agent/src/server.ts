@@ -4,6 +4,7 @@ import {
   parseInbound,
   dailyCron,
   reminderCron,
+  weeklyCron,
   encodeAgentMessage,
   type ScheduleEntry,
 } from '@helm/shared';
@@ -43,6 +44,41 @@ export function buildSchedules(): ScheduleEntry[] {
       }),
       enabled: true,
     },
+    // Routines: evening check-in and weekly review, each its own platform cron.
+    ...(rt.routines.evening
+      ? [
+          {
+            id: 'evening-checkin',
+            cron: dailyCron(rt.routines.evening),
+            tz: rt.timezone,
+            prompt: encodeAgentMessage({
+              v: 1,
+              type: 'routine.due',
+              requestId: 'cron:routine:evening',
+              studentId,
+              payload: { routine: 'evening' },
+            }),
+            enabled: true,
+          },
+        ]
+      : []),
+    ...(rt.routines.weekly
+      ? [
+          {
+            id: 'weekly-review',
+            cron: weeklyCron(rt.routines.weekly.weekday, rt.routines.weekly.time),
+            tz: rt.timezone,
+            prompt: encodeAgentMessage({
+              v: 1,
+              type: 'routine.due',
+              requestId: 'cron:routine:weekly',
+              studentId,
+              payload: { routine: 'weekly' },
+            }),
+            enabled: true,
+          },
+        ]
+      : []),
     // Each reminder is its own platform cron in the person's timezone. The prompt carries only
     // the id; the agent reads the title from its own settings file when it wakes.
     ...rt.reminders.map((r) => ({

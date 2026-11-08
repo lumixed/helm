@@ -1,5 +1,8 @@
 import {
   AgentState,
+  eveningText,
+  weeklyText,
+  localToUtc,
   utcToLocal,
   type AgentMessage,
   AgentSubmissionJob,
@@ -31,7 +34,15 @@ import {
 } from './tools/classify-email';
 import { DocumentError, readDocumentText, resolveInside } from './tools/read-document';
 import { SandboxUnavailable, parseInSandbox } from './tools/sandbox-parse';
-import { ChatMemory, chatReply, toReminderRule, type ChatReply, type ChatTurn } from './tools/chat';
+import {
+  ChatDraft,
+  ChatMemory,
+  ChatTask,
+  chatReply,
+  toReminderRule,
+  type ChatReply,
+  type ChatTurn,
+} from './tools/chat';
 
 export interface DocumentRead {
   text: string;
@@ -52,6 +63,7 @@ import {
   GmailError,
   GmailState,
   accessToken,
+  createDraft,
   getEmail,
   gmailCredsFromEnv,
   listRecent,
@@ -102,6 +114,8 @@ export interface HandlerDeps {
 export interface GmailReader {
   listNew(afterEpochS: number): Promise<string[]>;
   get(id: string): Promise<GmailEmail>;
+  /** Save a draft (never sends). */
+  draft(d: { to?: string | null; subject: string; body: string }): Promise<{ id: string }>;
 }
 
 function gmailReader(c: GmailCreds): GmailReader {
@@ -110,6 +124,7 @@ function gmailReader(c: GmailCreds): GmailReader {
   return {
     listNew: async (after) => listRecent(await t(), after, 10),
     get: async (id) => getEmail(await t(), id),
+    draft: async (d) => createDraft(await t(), d),
   };
 }
 
@@ -208,6 +223,7 @@ const WAKE_REASONS: Record<AgentMessage['type'], string> = {
   'redteam.egress': 'Woke for a red-team simulation',
   'gmail.sync': 'Woke to check your Gmail',
   'calendar.sync': 'Woke to sync your Canvas calendar',
+  'routine.due': 'Woke for your routine (Maritime cron)',
   'reminder.due': 'Woke for your reminder',
 };
 
@@ -259,6 +275,10 @@ export async function handleMessage(msg: AgentMessage, ctx: HandlerContext): Pro
     }
     case 'redteam.egress': {
       reply = await handleRedteam(msg, requestId, woke, ctx);
+      break;
+    }
+    case 'routine.due': {
+      reply = await handleRoutine(msg.payload.routine, requestId, woke, ctx);
       break;
     }
     case 'calendar.sync': {
@@ -1051,6 +1071,20 @@ export async function handleChat(
     r.intent === 'brief'
       ? 'Answered you in chat and started a fresh brief'
       : 'Answered a question in chat';
+  if (r.intent === 'task') {
+    const set = await addTaskFromChat(r, state, requestId, deps);
+    r = { ...r, reply: set.reply };
+    reason = set.ok
+      ? 'Added something you told me about to your plan'
+      : 'Could not add a task from chat';
+  }
+  if (r.intent === 'draft') {
+    const set = await saveDraftFromChat(r, deps);
+    r = { ...r, reply: set.reply };
+    reason = set.ok
+      ? 'Saved an email draft you asked for (not sent)'
+      : 'Wrote an email draft in chat';
+  }
   if (r.intent === 'remind') {
     const set = await setReminderFromChat(r, state.studentId, requestId, deps);
     r = { ...r, reply: set.reply };
@@ -1098,6 +1132,91 @@ export async function handleChat(
  * Quick capture: "remind me to pay rent on the 1st". The backend stores it and rewrites this
  * agent's settings file, so the reminder becomes its own Maritime cron on the next schedule sync.
  */
+/** "Ask my prof for an extension" → a Gmail draft the person reviews and sends. Never sends. */
+async function saveDraftFromChat(
+  r: ChatReply,
+  deps: HandlerDeps,
+): Promise<{ ok: boolean; reply: string }> {
+  const parsed = r.draft ? ChatDraft.safeParse(r.draft) : null;
+  if (!parsed?.success)
+    return {
+      ok: false,
+      reply: "I couldn't write that email. Tell me who it's for and what it's about.",
+    };
+  const d = parsed.data;
+  const text = `Subject: ${d.subject}\n\n${d.body}`;
+  const gmail = deps.gmail();
+  if (!gmail)
+    return {
+      ok: false,
+      reply:
+        `Here's a draft (connect Gmail in Settings and I'll save drafts straight to Gmail):\n\n${text}`.slice(
+          0,
+          1200,
+        ),
+    };
+  try {
+    await gmail.draft(d);
+    return {
+      ok: true,
+      reply: `Saved to your Gmail Drafts: “${d.subject}”${d.to ? ` to ${d.to}` : ''}. Review it and send it yourself; Helm never sends email.`,
+    };
+  } catch (err) {
+    const needsPermission = err instanceof GmailError && err.kind === 'auth';
+    return {
+      ok: false,
+      reply:
+        `${needsPermission ? 'To save drafts, reconnect Gmail in Settings (it needs the drafts permission). ' : "I couldn't reach Gmail. "}Here's the draft:\n\n${text}`.slice(
+          0,
+          1200,
+        ),
+    };
+  }
+}
+
+/** "I need to finish the lab report by Friday" → a task in the plan (time converted in code). */
+async function addTaskFromChat(
+  r: ChatReply,
+  state: AgentState,
+  requestId: string,
+  deps: HandlerDeps,
+): Promise<{ ok: boolean; reply: string }> {
+  const parsed = r.task ? ChatTask.safeParse(r.task) : null;
+  if (!parsed?.success)
+    return {
+      ok: false,
+      reply: "I couldn't tell what to add or when. Try “dentist Tuesday at 3pm”.",
+    };
+  const t = parsed.data;
+  let dueAt: string;
+  try {
+    dueAt = localToUtc(t.dueLocal, state.timezone).toISOString();
+  } catch {
+    return { ok: false, reply: "I couldn't read that date. Try “phone bill due Nov 20”." };
+  }
+  if (new Date(dueAt).getTime() < deps.now().getTime() - 60_000)
+    return { ok: false, reply: 'That time has already passed. When should it be?' };
+  try {
+    const res = await deps.post('/api/agent/tasks', {
+      studentId: state.studentId,
+      requestId,
+      title: t.title,
+      dueAt,
+      type: t.type,
+      area: t.area ?? null,
+    });
+    const body = (await res.json().catch(() => ({}))) as { dueLabel?: string; error?: string };
+    if (!res.ok)
+      return { ok: false, reply: `I couldn't add that: ${body.error ?? 'try again in a moment.'}` };
+    return {
+      ok: true,
+      reply: `Added “${t.title}”, ${t.type === 'appointment' || t.type === 'event' ? 'at' : 'due'} ${(body.dueLabel ?? t.dueLocal.replace('T', ' ')).replace(/\.$/, '')}. It's in your plan and your brief. Want a reminder too? Just say “remind me”.`,
+    };
+  } catch {
+    return { ok: false, reply: "I couldn't reach Helm to add that. Try again in a moment." };
+  }
+}
+
 async function setReminderFromChat(
   r: ChatReply,
   studentId: string,
@@ -1295,4 +1414,62 @@ export async function handleReminderDue(
     }),
   );
   return `reminder: ${delivered ? 'sent to your phone' : 'on the timeline (no phone linked)'}`;
+}
+
+/**
+ * A routine's platform cron woke the agent: write the evening check-in or the week ahead from the
+ * person's plan (code, no LLM) and have Helm send it to their phone.
+ */
+async function handleRoutine(
+  routine: 'evening' | 'weekly',
+  requestId: string,
+  woke: ReturnType<Emitter['event']>,
+  ctx: HandlerContext,
+): Promise<string> {
+  const deps = { ...defaultDeps(), ...ctx.deps };
+  let state: AgentState;
+  try {
+    const res = await deps.get('/api/agent/state');
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    state = AgentState.parse(await res.json());
+  } catch (err) {
+    await ctx.emitter.emit(
+      woke,
+      ctx.emitter.event({
+        eventId: `${requestId}:error`,
+        requestId,
+        type: 'agent.error',
+        reason: `Couldn't write your ${routine === 'evening' ? 'evening check-in' : 'weekly review'}.`,
+        payload: { stage: 'routine', detail: String(err).slice(0, 200) },
+      }),
+    );
+    return 'routine: no state';
+  }
+  const text =
+    routine === 'evening' ? eveningText(state, deps.now()) : weeklyText(state, deps.now());
+  let delivered = false;
+  try {
+    const res = await deps.post('/api/agent/routine', {
+      studentId: state.studentId,
+      requestId,
+      routine,
+      text,
+    });
+    delivered =
+      res.ok &&
+      Boolean(((await res.json().catch(() => ({}))) as { delivered?: boolean }).delivered);
+  } catch {
+    /* logged below */
+  }
+  await ctx.emitter.emit(
+    woke,
+    ctx.emitter.event({
+      eventId: `${requestId}:routine`,
+      requestId,
+      type: 'routine.sent',
+      reason: `${routine === 'evening' ? 'Evening check-in' : 'Weekly review'} written${delivered ? ' and sent to your phone' : ' (not delivered: no phone connected)'}`,
+      payload: { routine, delivered, source: ctx.source },
+    }),
+  );
+  return `routine ${routine}: ${delivered ? 'sent' : 'written'}`;
 }

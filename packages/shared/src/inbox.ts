@@ -136,6 +136,17 @@ export const AgentInboxMessageRequest = z.object({
 });
 export type AgentInboxMessageRequest = z.infer<typeof AgentInboxMessageRequest>;
 
+/** Agent → backend: the person asked in chat to add something to their plan. */
+export const TaskCreateRequest = z.object({
+  studentId: z.string().min(1).max(128),
+  requestId: z.string().min(1).max(200),
+  title: z.string().min(1).max(200),
+  dueAt: z.iso.datetime({ offset: true }),
+  type: z.enum(['task', 'appointment', 'bill', 'assignment', 'event']),
+  area: z.string().max(40).nullable(),
+});
+export type TaskCreateRequest = z.infer<typeof TaskCreateRequest>;
+
 /** Agent → backend: what one email means. Never contains the email body. */
 export const InboxResultRequest = z.object({
   studentId: z.string().min(1).max(128),

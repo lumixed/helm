@@ -69,7 +69,11 @@ describe('gmail.sync handler', () => {
       handlerDeps: {
         dataDir: dir,
         now: () => new Date('2026-11-07T18:00:00Z'),
-        gmail: () => ({ listNew: async () => ['g1'], get: async () => email }),
+        gmail: () => ({
+          listNew: async () => ['g1'],
+          get: async () => email,
+          draft: async () => ({ id: 'd1' }),
+        }),
         get: async () => new Response(JSON.stringify(state)),
         classify: async (e) => ({
           change: normalizeClassification(

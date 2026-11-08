@@ -27,9 +27,9 @@ export function GmailCard({ address, result }: { address: string | null; result?
       {address ? (
         <>
           <p className="mt-1">
-            Reading <strong>{address}</strong> (read-only). Your agent checks it every 15 minutes.
-            The access key lives only in your private agent, not on Helm&apos;s servers, and emails
-            never leave it.
+            Reading <strong>{address}</strong> (read-only for reading). Your agent checks it every
+            15 minutes and saves email drafts only when you ask in chat. The access key lives only
+            in your private agent, not on Helm&apos;s servers, and emails never leave it.
           </p>
           <div className="mt-3 flex flex-wrap gap-2">
             <Button
@@ -65,8 +65,10 @@ export function GmailCard({ address, result }: { address: string | null; result?
       ) : (
         <>
           <p className="mt-1">
-            Let your agent read your Gmail (read-only) to catch deadlines, bills and appointments.
-            It never sends or deletes anything.
+            Let your agent read your Gmail (read-only) to catch deadlines, bills and appointments,
+            and save email drafts you ask for. Google&apos;s permission screen says
+            &ldquo;send&rdquo; because drafts and sending share one permission; Helm only ever saves
+            drafts, and never sends or deletes anything.
           </p>
           <a
             href="/api/gmail/connect"

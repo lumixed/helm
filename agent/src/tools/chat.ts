@@ -31,11 +31,33 @@ export const ChatReminder = z.object({
 });
 export type ChatReminder = z.infer<typeof ChatReminder>;
 
+/** What the model fills in for "I need to … by Friday"; times are local, converted in code. */
+export const ChatTask = z.object({
+  title: z.string().min(1).max(200),
+  /** Local wall time "YYYY-MM-DDTHH:mm". */
+  dueLocal: z.string().regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/),
+  type: z.enum(['task', 'appointment', 'bill', 'assignment', 'event']),
+  /** Course code or area of life ("DATA 210", "Work", "Health"). */
+  area: z.string().max(40).nullish(),
+});
+export type ChatTask = z.infer<typeof ChatTask>;
+
+/** What the model writes for "draft an email asking for an extension". Saved as a Gmail draft. */
+export const ChatDraft = z.object({
+  /** Only when the person gave an address. */
+  to: z.string().max(200).nullish(),
+  subject: z.string().min(1).max(200),
+  body: z.string().min(1).max(4000),
+});
+export type ChatDraft = z.infer<typeof ChatDraft>;
+
 export const ChatReply = z.object({
   reply: z.string().min(1).max(1200),
-  /** brief: plan / brief now; remind: set a reminder; answer: anything else. */
-  intent: z.enum(['answer', 'brief', 'remind']),
+  /** brief: plan / brief now; remind: set a reminder; task: add to the plan; answer: anything else. */
+  intent: z.enum(['answer', 'brief', 'remind', 'task', 'draft']),
   reminder: ChatReminder.nullish(),
+  task: ChatTask.nullish(),
+  draft: ChatDraft.nullish(),
 });
 export type ChatReply = z.infer<typeof ChatReply>;
 
@@ -44,7 +66,37 @@ export const CHAT_JSON_SCHEMA = {
   required: ['reply', 'intent'],
   properties: {
     reply: { type: 'string', description: 'Short, plain answer, at most 80 words' },
-    intent: { type: 'string', enum: ['answer', 'brief', 'remind'] },
+    intent: { type: 'string', enum: ['answer', 'brief', 'remind', 'task', 'draft'] },
+    draft: {
+      type: 'object',
+      description: 'Only when intent is "draft"',
+      required: ['subject', 'body'],
+      properties: {
+        to: { type: ['string', 'null'], description: 'Email address, only if the person gave one' },
+        subject: { type: 'string' },
+        body: {
+          type: 'string',
+          description: 'Plain text email, polite and short, signed with their name',
+        },
+      },
+    },
+    task: {
+      type: 'object',
+      description: 'Only when intent is "task"',
+      required: ['title', 'dueLocal', 'type'],
+      properties: {
+        title: { type: 'string', description: 'Short, e.g. "Finish lab report"' },
+        dueLocal: {
+          type: 'string',
+          description: 'YYYY-MM-DDTHH:mm local time; 23:59 if no time given',
+        },
+        type: { type: 'string', enum: ['task', 'appointment', 'bill', 'assignment', 'event'] },
+        area: {
+          type: ['string', 'null'],
+          description: 'Course code, or Work / Home / Health / Money',
+        },
+      },
+    },
     reminder: {
       type: 'object',
       description: 'Only when intent is "remind"',
@@ -123,8 +175,22 @@ messages. If they want a change, name the right place in the Helm app: "Review" 
 extensions: if they are unwell or swamped, help them prioritise from the list and suggest they
 email the instructor or person involved. Never claim to have changed or sent anything.
 If they ask for today's plan or their brief, set intent "brief" and say you're writing it now.
-The one thing you CAN do: set a reminder the person asks for ("remind me to pay rent on the 1st",
-"dentist Tuesday 3pm", "every Monday 9am: quiz"). Then set intent "remind" and fill "reminder":
+Two things you CAN do, only when the person asks in their own words:
+1) Add something to their plan: when they tell you about something they must do, pay, hand in or
+attend by a time ("I need to finish the lab report by Friday", "dentist Tuesday 3pm", "phone bill
+due the 20th"). Set intent "task" and fill "task": a short title; dueLocal YYYY-MM-DDTHH:mm in
+their local time (23:59 if they gave no time; work out dates from today's date above); type
+(appointment for a visit or meeting, bill for a payment, assignment for school work, event to
+attend, otherwise task); area (course code, or Work / Home / Health / Money). In "reply" restate it
+briefly; Helm confirms it.
+3) Write an email DRAFT when they ask you to write, draft or reply to an email ("ask my prof for
+an extension on Assignment 4", "tell my landlord I can't make Thursday"). Set intent "draft" and
+fill "draft": subject, and a short, polite plain-text body in their voice, signed with their name;
+"to" only if they gave an email address, never guess one. Use facts from their plan (titles, due
+dates); do not invent reasons they did not give. Helm saves it to their Gmail Drafts; it is never
+sent by Helm. In "reply" say it's ready to review.
+2) Set a reminder, only when they ask to be reminded ("remind me to pay rent on the 1st", "every
+Monday 9am: quiz"). Then set intent "remind" and fill "reminder":
 a short title; repeat once/daily/weekly/monthly; time HH:MM 24-hour in their local time (9:00
 if they gave none; "morning" 9:00, "evening" 18:00); date YYYY-MM-DD for once (work it out from
 today's date above; "tomorrow" is the next day); weekday 0-6 (Sunday 0) for weekly; day 1-31 for

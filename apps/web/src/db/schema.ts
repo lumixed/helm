@@ -79,6 +79,11 @@ export const users = pgTable(
     calendarHost: text('calendar_host'),
     calendarConnectedAt: timestamp('calendar_connected_at', { withTimezone: true }),
     calendarSyncedAt: timestamp('calendar_synced_at', { withTimezone: true }),
+    /** Evening check-in / weekly review settings; each becomes a Maritime cron on the agent. */
+    routinesJson: jsonb('routines_json')
+      .$type<{ evening?: string; weekly?: { weekday: number; time: string } }>()
+      .notNull()
+      .default({}),
     onboardedAt: timestamp('onboarded_at', { withTimezone: true }),
     createdAt: createdAt(),
   },

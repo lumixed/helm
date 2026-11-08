@@ -228,6 +228,10 @@ export function agentSettings(
     demoMode: process.env.DEMO_MODE === 'true',
     // Each one becomes its own Maritime cron on the agent (GET /schedules).
     ...(reminders.length ? { reminders } : {}),
+    // Evening check-in and weekly review: each its own Maritime cron too.
+    ...(user.routinesJson && (user.routinesJson.evening || user.routinesJson.weekly)
+      ? { routines: user.routinesJson }
+      : {}),
   };
   return JSON.stringify(AgentRuntimeConfig.parse(settings), null, 2);
 }

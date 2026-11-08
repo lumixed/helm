@@ -19,6 +19,7 @@ export const AGENT_MESSAGE_TYPES = [
   'gmail.sync',
   'calendar.sync',
   'reminder.due',
+  'routine.due',
 ] as const;
 
 export const AgentMessageType = z.enum(AGENT_MESSAGE_TYPES);
@@ -133,7 +134,15 @@ export const ReminderDueMessage = z.object({
   payload: z.object({ reminderId: z.string().min(1).max(64) }),
 });
 
+/** A routine's Maritime cron fired: evening check-in or weekly review. */
+export const RoutineDueMessage = z.object({
+  ...base,
+  type: z.literal('routine.due'),
+  payload: z.object({ routine: z.enum(['evening', 'weekly']) }),
+});
+
 export const AgentMessage = z.discriminatedUnion('type', [
+  RoutineDueMessage,
   ReminderDueMessage,
   CalendarSyncMessage,
   GmailSyncMessage,

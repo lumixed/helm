@@ -1,6 +1,7 @@
 import { AgentStatus } from '@/components/AgentStatus';
 import { GmailCard } from '@/components/GmailCard';
 import { CalendarCard } from '@/components/CalendarCard';
+import { RoutinesCard } from '@/components/RoutinesCard';
 import { formatWhen } from '@/lib/format';
 import { MessagingAppsCard } from '@/components/MessagingAppsCard';
 import { computersFromEnv } from '@/lib/computers';
@@ -59,6 +60,7 @@ export default async function SetupPage({
           <h2 id="connections-h" className="pt-2 text-[17px] font-semibold tracking-tight text-ink">
             Connections
           </h2>
+          <RoutinesCard initial={full.routinesJson ?? {}} />
           <CalendarCard
             host={full.calendarHost}
             syncedLabel={

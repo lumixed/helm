@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { MAX_REMINDERS, ReminderSchedule } from './reminders';
+import { Routines } from './routines';
 
 /**
  * Per-student settings that can change after the agent exists (brief time, timezone). The backend
@@ -24,6 +25,8 @@ export const AgentRuntimeConfig = z.object({
   demoMode: z.boolean().optional(),
   /** The person's reminders; each becomes its own Maritime cron schedule. No secrets. */
   reminders: z.array(ReminderSchedule).max(MAX_REMINDERS).optional(),
+  /** Evening check-in and weekly review times; each becomes its own Maritime cron. */
+  routines: Routines.optional(),
   /** LOCAL DEVELOPMENT ONLY (HELM_LOCAL_AGENT_URL). Production passes these as encrypted env. */
   studentId: z.string().min(1).max(128).optional(),
   agentToken: z.string().min(20).max(200).optional(),
